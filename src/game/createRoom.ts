@@ -44,6 +44,7 @@ export function createRoom(parent: HTMLElement, equipment: readonly Equipment[],
     setTouchDirection: (direction, pressed) => scene.setTouchDirection(direction, pressed),
     interact: () => scene.interact(),
     setReducedMotion: (reduced) => scene.setReducedMotion(reduced),
+    setEnergyPlan: (plan) => scene.setEnergyPlan(plan),
     getPlayerPosition: () => scene.getPlayerPosition(),
   };
 }

@@ -1,10 +1,11 @@
 import { INITIAL_POSITION, SCHOOL_CASE } from '../data/schoolCase';
-import type { Point, Progress, Settings } from '../types';
+import type { EnergyPlan, Point, Progress, Settings } from '../types';
+import { validateEnergyPlan } from './energyPlan';
 
 export const PROGRESS_STORAGE_KEY = 'eco-detective:progress:v1';
 export const SETTINGS_STORAGE_KEY = 'eco-detective:settings:v1';
 
-const defaultSettings: Settings = { reducedMotion: false, showHints: true };
+const defaultSettings: Settings = { reducedMotion: false, showHints: true, soundEnabled: false };
 const equipmentIds = new Set(SCHOOL_CASE.equipment.map((device) => device.id));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -22,6 +23,17 @@ function normalizePosition(value: unknown): Point {
   return { ...INITIAL_POSITION };
 }
 
+function normalizeEnergyPlan(value: unknown): EnergyPlan | undefined {
+  if (!isRecord(value) || typeof value.computerHours !== 'number' || typeof value.lightingHours !== 'number') return undefined;
+  const plan = { computerHours: value.computerHours, lightingHours: value.lightingHours };
+  try {
+    validateEnergyPlan(plan);
+    return plan;
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeProgress(value: unknown): Progress | null {
   if (!isRecord(value) || value.version !== 1 || value.caseId !== SCHOOL_CASE.id
     || !Array.isArray(value.inspectedIds) || value.inspectedIds.length > 1_000
@@ -35,14 +47,17 @@ function normalizeProgress(value: unknown): Progress | null {
   const inspectedIds = [...new Set(value.inspectedIds.filter((id) => equipmentIds.has(id)))];
   const enoughEvidence = inspectedIds.length >= SCHOOL_CASE.requiredEvidence
     && SCHOOL_CASE.requiredDeviceIds.every((id) => inspectedIds.includes(id));
+  const reportSolved = value.reportSolved && enoughEvidence && value.reportAttempts > 0;
+  const appliedPlan = reportSolved ? normalizeEnergyPlan(value.appliedPlan) : undefined;
   return {
     version: 1,
     caseId: SCHOOL_CASE.id,
     inspectedIds,
     playerPosition: normalizePosition(value.playerPosition),
-    reportSolved: value.reportSolved && enoughEvidence && value.reportAttempts > 0,
+    reportSolved,
     reportAttempts: value.reportAttempts,
     updatedAt: new Date(value.updatedAt).toISOString(),
+    ...(appliedPlan ? { appliedPlan } : {}),
   };
 }
 
@@ -95,6 +110,7 @@ export function loadSettings(): Settings {
     return {
       reducedMotion: typeof data.reducedMotion === 'boolean' ? data.reducedMotion : defaultSettings.reducedMotion,
       showHints: typeof data.showHints === 'boolean' ? data.showHints : defaultSettings.showHints,
+      soundEnabled: typeof data.soundEnabled === 'boolean' ? data.soundEnabled : defaultSettings.soundEnabled,
     };
   } catch {
     return { ...defaultSettings };
@@ -102,11 +118,13 @@ export function loadSettings(): Settings {
 }
 
 export function saveSettings(settings: Settings): boolean {
-  if (typeof settings.reducedMotion !== 'boolean' || typeof settings.showHints !== 'boolean') return false;
+  if (typeof settings.reducedMotion !== 'boolean' || typeof settings.showHints !== 'boolean'
+    || typeof settings.soundEnabled !== 'boolean') return false;
   try {
     globalThis.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
       reducedMotion: settings.reducedMotion,
       showHints: settings.showHints,
+      soundEnabled: settings.soundEnabled,
     }));
     return true;
   } catch {

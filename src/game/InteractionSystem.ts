@@ -9,15 +9,20 @@ type DeviceMarker = {
   ring: Phaser.GameObjects.Arc;
   number: Phaser.GameObjects.Text;
   caption: Phaser.GameObjects.Text;
+  activeDot: Phaser.GameObjects.Arc;
 };
 
 /** The same reach check is used for the keyboard, touch button, and room markers. */
 export class InteractionSystem {
+  private readonly scene: Phaser.Scene;
   private readonly markers: DeviceMarker[];
   private inspected = new Set<string>();
   private nearbyId: string | null = null;
+  private reducedMotion = false;
+  private readonly feedback = new Set<Phaser.GameObjects.Arc>();
 
   constructor(scene: Phaser.Scene, equipment: readonly Equipment[], onClick: (id: string) => void) {
+    this.scene = scene;
     this.markers = equipment.map((device, index) => {
       const { x, y } = device.position;
       const halo = scene.add.circle(x, y, 35, 0x49ead3, 0.09).setDepth(39);
@@ -33,7 +38,9 @@ export class InteractionSystem {
         fontFamily: 'Manrope, Arial, sans-serif', fontSize: '12px', color: '#b0c4d4',
         backgroundColor: '#101f30', padding: { x: 8, y: 4 },
       }).setOrigin(0.5, 0).setDepth(42);
-      return { device, halo, ring, number, caption };
+      const activeDot = scene.add.circle(x + 15, y - 14, 4, 0x9bffe8, 1)
+        .setStrokeStyle(2, 0x0b2332).setDepth(43).setVisible(false);
+      return { device, halo, ring, number, caption, activeDot };
     });
   }
 
@@ -68,10 +75,33 @@ export class InteractionSystem {
     this.refresh();
   }
 
+  setReducedMotion(reduced: boolean): void {
+    this.reducedMotion = reduced;
+    if (!reduced) return;
+    for (const pulse of this.feedback) {
+      this.scene.tweens.killTweensOf(pulse);
+      pulse.destroy();
+    }
+    this.feedback.clear();
+  }
+
+  showInspectionFeedback(id: string): void {
+    const marker = this.markers.find(({ device }) => device.id === id);
+    if (!marker || this.reducedMotion) return;
+    const pulse = this.scene.add.circle(marker.device.position.x, marker.device.position.y, 20)
+      .setStrokeStyle(2, 0x83ffd1, 0.85).setDepth(44);
+    this.feedback.add(pulse);
+    this.scene.tweens.add({
+      targets: pulse, scale: 2.8, alpha: 0, duration: 1000, ease: 'Cubic.Out',
+      onComplete: () => { this.feedback.delete(pulse); pulse.destroy(); },
+    });
+  }
+
   animate(time: number, reducedMotion: boolean): void {
     for (const marker of this.markers) {
       const nearby = marker.device.id === this.nearbyId;
       marker.halo.setAlpha(nearby ? (reducedMotion ? 1 : 0.76 + Math.sin(time / 260) * 0.24) : 0.5);
+      marker.ring.setScale(nearby && !reducedMotion ? 1 + Math.sin(time / 400) * 0.025 : 1);
     }
   }
 
@@ -85,6 +115,8 @@ export class InteractionSystem {
       marker.number.setText(inspected ? '✓' : String(index + 1).padStart(2, '0'));
       marker.number.setColor(inspected ? '#82f1b2' : '#c1fff0');
       marker.caption.setColor(nearby ? '#effffb' : inspected ? '#9cd6b4' : '#b0c4d4');
+      marker.caption.setText(nearby ? `${marker.device.shortName} · ОСМОТР` : marker.device.shortName);
+      marker.activeDot.setVisible(nearby);
       marker.halo.setFillStyle(color, nearby ? 0.12 : 0.08);
     });
   }

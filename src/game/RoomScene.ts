@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import type { Equipment, GameBridge, Point } from '../types';
+import type { EnergyPlan, Equipment, GameBridge, Point } from '../types';
 import { InteractionSystem } from './InteractionSystem';
 import { Player } from './Player';
-import { drawRoom, FURNITURE, ROOM_BOUNDS, safePlayerPosition, SPAWN } from './roomArtwork';
+import { applyRoomEnergyPlan, drawRoom, FURNITURE, ROOM_BOUNDS, safePlayerPosition, SPAWN, type RoomArtwork } from './roomArtwork';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -13,8 +13,11 @@ export class RoomScene extends Phaser.Scene {
   private player?: Player;
   private interactions?: InteractionSystem;
   private keys?: Record<string, Phaser.Input.Keyboard.Key>;
-  private lighting?: Phaser.GameObjects.Image;
+  private artwork?: RoomArtwork;
+  private energyPlan: EnergyPlan | null = null;
   private requestedActive = false;
+  private hasBeenActive = false;
+  private readonly pendingFeedback = new Set<string>();
   private browserFocused = true;
   private reducedMotion = false;
   private inspectedIds: readonly string[] = [];
@@ -35,7 +38,8 @@ export class RoomScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor('#070f1c');
     this.physics.world.setBounds(ROOM_BOUNDS.x, ROOM_BOUNDS.y, ROOM_BOUNDS.width, ROOM_BOUNDS.height);
-    this.lighting = drawRoom(this);
+    this.artwork = drawRoom(this);
+    applyRoomEnergyPlan(this.artwork, this.energyPlan);
     this.pendingPosition = safePlayerPosition(this.pendingPosition);
     this.player = new Player(this, this.pendingPosition);
 
@@ -48,6 +52,7 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.collider(this.player.sprite, furniture);
     this.interactions = new InteractionSystem(this, this.equipment, (id) => this.tryInteract(id));
     this.interactions.setInspected(this.inspectedIds);
+    this.interactions.setReducedMotion(this.reducedMotion);
 
     if (this.input.keyboard) {
       this.keys = this.input.keyboard.addKeys(this.capturedKeys.join(','), false, false) as Record<string, Phaser.Input.Keyboard.Key>;
@@ -77,8 +82,13 @@ export class RoomScene extends Phaser.Scene {
       this.player.stop();
     }
     this.player.animate(time, this.reducedMotion);
-    this.interactions.animate(time, this.reducedMotion);
-    this.lighting?.setAlpha(this.reducedMotion ? 1 : 0.95 + Math.sin(time / 1500) * 0.05);
+    this.interactions.animate(time, this.reducedMotion || !this.isActive());
+    if (this.artwork) {
+      const lightLevel = this.energyPlan ? 0.48 + this.energyPlan.lightingHours / 8 * 0.52 : 1;
+      this.artwork.lighting.setAlpha(lightLevel * (this.reducedMotion || !this.isActive() ? 1 : 0.97 + Math.sin(time / 1500) * 0.03));
+      this.artwork.scanningLine.setVisible(!this.reducedMotion && this.isActive());
+      this.artwork.scanningLine.setY(126 + (time % 12000) / 12000 * 548);
+    }
 
     if ((moving && time - this.lastPositionTime >= 650) || (this.wasMoving && !moving)) {
       this.reportPosition();
@@ -89,6 +99,13 @@ export class RoomScene extends Phaser.Scene {
 
   setActive(active: boolean): void {
     this.requestedActive = active;
+    if (active) {
+      this.hasBeenActive = true;
+      // The scanner records evidence while its panel is open. Show the room
+      // feedback when the player closes that panel and can actually see it.
+      for (const id of this.pendingFeedback) this.interactions?.showInspectionFeedback(id);
+      this.pendingFeedback.clear();
+    }
     this.clearControls();
     this.syncInputState();
     this.updateNearby();
@@ -107,8 +124,15 @@ export class RoomScene extends Phaser.Scene {
   }
 
   setInspected(ids: readonly string[]): void {
+    // A continuation loads quietly; only evidence collected during play pulses.
+    const newlyInspected = this.hasBeenActive ? ids.filter((id) => !this.inspectedIds.includes(id)) : [];
     this.inspectedIds = [...ids];
     this.interactions?.setInspected(ids);
+    for (const id of this.pendingFeedback) if (!ids.includes(id)) this.pendingFeedback.delete(id);
+    for (const id of newlyInspected) {
+      if (this.isActive()) this.interactions?.showInspectionFeedback(id);
+      else this.pendingFeedback.add(id);
+    }
   }
 
   setTouchDirection(direction: Direction, pressed: boolean): void {
@@ -117,6 +141,12 @@ export class RoomScene extends Phaser.Scene {
 
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
+    this.interactions?.setReducedMotion(reduced);
+  }
+
+  setEnergyPlan(plan: EnergyPlan | null): void {
+    this.energyPlan = plan ? { ...plan } : null;
+    if (this.artwork) applyRoomEnergyPlan(this.artwork, this.energyPlan);
   }
 
   interact(): void {

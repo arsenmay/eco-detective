@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Point } from '../types';
+import type { EnergyPlan, Point } from '../types';
 
 export const WORLD_WIDTH = 1120;
 export const WORLD_HEIGHT = 760;
@@ -74,6 +74,8 @@ function computer(art: Phaser.GameObjects.Graphics, x: number, y: number, bright
 }
 
 function workstation(art: Phaser.GameObjects.Graphics, x: number, y: number, two = true): void {
+  // Low side faces and the offset shadow give the desks a little depth without
+  // obscuring the walkable aisles of this deliberately top-down scene.
   art.fillStyle(0x020713, 0.55);
   art.fillRoundedRect(x - 76, y - 25, 154, 71, 9);
   art.fillStyle(0x1b2d43);
@@ -82,6 +84,10 @@ function workstation(art: Phaser.GameObjects.Graphics, x: number, y: number, two
   art.fillRoundedRect(x - 70, y - 36, 140, 65, 6);
   art.fillStyle(0x35465b);
   art.fillRoundedRect(x - 67, y - 33, 134, 59, 5);
+  art.fillStyle(0x6f8495, 0.16);
+  art.fillRoundedRect(x - 65, y - 31, 130, 8, 3);
+  art.fillStyle(0x182739);
+  art.fillRoundedRect(x - 66, y + 25, 132, 5, 2);
   art.lineStyle(1, 0x63768c, 0.6);
   art.strokeRoundedRect(x - 69, y - 35, 138, 63, 6);
   art.lineStyle(2, 0x0b1b2d, 0.7);
@@ -108,6 +114,18 @@ function workstation(art: Phaser.GameObjects.Graphics, x: number, y: number, two
   art.fillRoundedRect(x + 16, y + 57, 38, 9, 3);
   art.lineStyle(2, 0x648399, 0.65);
   art.lineBetween(x + 20, y + 44, x + 49, y + 44);
+
+  // Cable clips, a PC tower at the far edge and a warm paper detail keep the
+  // otherwise technical room feeling like a classroom people actually use.
+  art.fillStyle(0x142235);
+  art.fillRoundedRect(x + 52, y - 29, 11, 38, 2);
+  art.fillStyle(0x536779);
+  art.fillRect(x + 55, y - 24, 5, 1);
+  art.fillRect(x + 55, y - 19, 5, 1);
+  art.fillStyle(0x74e5be);
+  art.fillCircle(x + 57, y + 2, 1.3);
+  art.fillStyle(0xe1cba0, 0.75);
+  art.fillRoundedRect(x - 60, y + 14, 12, 10, 1);
 }
 
 function plant(art: Phaser.GameObjects.Graphics, x: number, y: number): void {
@@ -133,7 +151,15 @@ function cacheArtwork(scene: Phaser.Scene, art: Phaser.GameObjects.Graphics, key
   return image;
 }
 
-export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
+export type RoomArtwork = {
+  lighting: Phaser.GameObjects.Image;
+  standbyScreens: Phaser.GameObjects.Image;
+  modelLabel: Phaser.GameObjects.Text;
+  scanningLine: Phaser.GameObjects.Rectangle;
+};
+
+/** Original artwork is generated once and never needs a downloaded asset. */
+export function drawRoom(scene: Phaser.Scene): RoomArtwork {
   const floor = scene.add.graphics().setDepth(0);
   floor.fillStyle(0x070f1c);
   floor.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -157,6 +183,22 @@ export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
   for (let y = 126; y <= 674; y += 48) floor.lineBetween(112, y, 1008, y);
   floor.lineStyle(2, 0x34495e, 0.5);
   floor.strokeRect(122, 136, 876, 528);
+
+  // Furniture islands and technical aisle markings add a clear spatial rhythm.
+  for (const [x, y] of [[330, 285], [550, 285], [330, 455], [550, 455]] as const) {
+    floor.fillStyle(0x0d1b2b, 0.35);
+    floor.fillRoundedRect(x - 84, y - 46, 170, 116, 10);
+    floor.lineStyle(1, 0x7395a4, 0.12);
+    floor.strokeRoundedRect(x - 84, y - 46, 170, 116, 10);
+  }
+  floor.lineStyle(1, 0x43c9be, 0.15);
+  for (let x = 744; x < 924; x += 19) floor.lineBetween(x, 625, x + 8, 625);
+  for (let y = 296; y < 588; y += 20) floor.lineBetween(748, y, 748, y + 7);
+  floor.lineStyle(2, 0x60e8d0, 0.3);
+  for (const [x, y, sx, sy] of [[127, 140, 1, 1], [994, 140, -1, 1], [127, 660, 1, -1], [994, 660, -1, -1]]) {
+    floor.lineBetween(x, y, x + sx * 19, y);
+    floor.lineBetween(x, y, x, y + sy * 19);
+  }
 
   // Three invented windows illuminate the room from the west wall.
   for (const y of [219, 348, 477]) {
@@ -198,6 +240,24 @@ export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
   art.fillRect(1018, 124, 17, 552);
   art.fillStyle(0x24364b);
   art.fillRect(82, 124, 28, 552);
+
+  // Small wall fixtures: ventilation, clock and a classroom materials shelf.
+  art.fillStyle(0x101e2e);
+  art.fillRoundedRect(130, 93, 63, 18, 3);
+  art.lineStyle(1, 0x7390a0, 0.5);
+  for (let x = 137; x <= 185; x += 6) art.lineBetween(x, 97, x, 106);
+  art.fillStyle(0x111d2e);
+  art.fillCircle(712, 107, 11);
+  art.lineStyle(1, 0x85a3b3, 0.7);
+  art.strokeCircle(712, 107, 9);
+  art.lineBetween(712, 107, 712, 101);
+  art.lineBetween(712, 107, 717, 110);
+  art.fillStyle(0x425467);
+  art.fillRoundedRect(279, 91, 89, 16, 3);
+  for (let index = 0; index < 7; index += 1) {
+    art.fillStyle([0x638b96, 0x957f66, 0x416a82, 0x73a094][index % 4]);
+    art.fillRoundedRect(284 + index * 10, 91, 7, 12, 1);
+  }
   for (const y of [219, 348, 477]) {
     art.fillStyle(0x0b1526);
     art.fillRect(88, y - 33, 25, 95);
@@ -259,6 +319,13 @@ export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
   art.fillStyle(0x172b40);
   art.fillCircle(886, 175, 6);
 
+  // A soft optical cone is illustrative; the lesson projector stays available.
+  floor.fillStyle(0x79c9ee, 0.032);
+  floor.fillPoints([
+    new Phaser.Geom.Point(831, 171), new Phaser.Geom.Point(676, 135),
+    new Phaser.Geom.Point(675, 164), new Phaser.Geom.Point(831, 178),
+  ], true);
+
   workstation(art, 330, 285);
   workstation(art, 550, 285);
   workstation(art, 330, 455, false);
@@ -313,6 +380,19 @@ export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
   art.fillStyle(0x35495f);
   art.fillRoundedRect(684, 594, 30, 26, 4);
 
+  // Daylight sensor and pinboard notes are decor, not additional evidence.
+  art.fillStyle(0x576b7c);
+  art.fillRoundedRect(127, 559, 15, 26, 3);
+  art.fillStyle(0x57cfc0);
+  art.fillRoundedRect(131, 564, 7, 7, 2);
+  art.fillStyle(0xd5c59c);
+  art.fillRoundedRect(976, 560, 9, 13, 1);
+  art.fillStyle(0x92b5bb);
+  art.fillRoundedRect(988, 559, 10, 14, 1);
+  art.lineStyle(1, 0x4d7285, 0.8);
+  art.lineBetween(978, 564, 982, 564);
+  art.lineBetween(990, 564, 995, 564);
+
   // The doorway is an illustration; this prototype has one room.
   art.fillStyle(0x324459);
   art.fillRoundedRect(80, 674, 964, 25, 5);
@@ -344,9 +424,36 @@ export function drawRoom(scene: Phaser.Scene): Phaser.GameObjects.Image {
   label(scene, 822, 717, 'ОБЪЕКТЫ: 01—06', 10, '#658a96');
   label(scene, 467, 601, 'РАБОЧАЯ ЗОНА', 10, '#506c80');
 
+  label(scene, 215, 647, 'СВЕТ / ДНЕВНОЙ РЕЖИМ', 9, '#5d7f91');
+  const modelLabel = label(scene, 112, 68, 'СКАНИРОВАНИЕ УЧЕБНОЙ МОДЕЛИ', 10, '#4a8a9a');
+
+  // The six student screens can enter the fictional planned standby mode.
+  // The teacher's PC, projector and network deliberately remain unchanged.
+  const screens = scene.add.graphics();
+  for (const [x, y] of [[294, 281], [364, 281], [514, 281], [584, 281], [514, 451], [584, 451]] as const) {
+    screens.fillStyle(0x071725, 0.95);
+    screens.fillRoundedRect(x - 19, y - 21, 39, 22, 2);
+    screens.fillStyle(0x5dafa6, 0.8);
+    screens.fillCircle(x + 2, y - 10, 4);
+    screens.fillStyle(0x071725, 0.98);
+    screens.fillCircle(x + 4, y - 12, 4);
+  }
+  const standbyScreens = cacheArtwork(scene, screens, 'lab-standby-screens', 7).setAlpha(0);
+  const scanningLine = scene.add.rectangle(112, 126, 896, 1, 0x65edda, 0.1)
+    .setOrigin(0, 0).setDepth(5);
+
   // Bake the many small original drawing commands once; each frame only draws
-  // three room textures. This also keeps software-rendered mobile scenes fast.
+  // a few room textures. This keeps software-rendered mobile scenes fast.
   cacheArtwork(scene, floor, 'lab-floor', 0);
   cacheArtwork(scene, art, 'lab-furniture', 6);
-  return cacheArtwork(scene, light, 'lab-lighting', 8);
+  return { lighting: cacheArtwork(scene, light, 'lab-lighting', 8), standbyScreens, modelLabel, scanningLine };
+}
+
+export function applyRoomEnergyPlan(artwork: RoomArtwork, plan: EnergyPlan | null): void {
+  const standby = plan !== null && plan.computerHours < 10;
+  artwork.standbyScreens.setAlpha(standby ? 0.9 : 0);
+  artwork.modelLabel.setText(plan
+    ? `РЕЖИМ МОДЕЛИ · ПК ${plan.computerHours} Ч / СВЕТ ${plan.lightingHours} Ч`
+    : 'СКАНИРОВАНИЕ УЧЕБНОЙ МОДЕЛИ');
+  artwork.modelLabel.setColor(plan ? '#72d9b9' : '#4a8a9a');
 }

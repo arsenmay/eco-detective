@@ -1,9 +1,11 @@
-import type { Equipment, GameBridge, Progress, RoomController, Settings } from '../types';
+import type { EnergyPlan, Equipment, GameBridge, Progress, RoomController, Settings } from '../types';
 import { INITIAL_POSITION, SCHOOL_CASE } from '../data/schoolCase';
 import { calculateEquipmentEnergy, formatEnergy } from '../systems/energy';
 import { canSubmitReport, evaluateReport, getInvestigationSavings, getMonthlyBaseline, inspectEquipment } from '../systems/investigation';
 import { createProgress, loadProgress, loadSettings, saveProgress, saveSettings } from '../systems/storage';
 import { icon } from './icons';
+import { applyEnergyPlan, calculateEnergyPlan, DEFAULT_ENERGY_PLAN } from '../systems/energyPlan';
+import { FeedbackAudio } from './FeedbackAudio';
 
 const escape = (value: string): string => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const requiredNames = (): string[] => SCHOOL_CASE.requiredDeviceIds.map((id) => SCHOOL_CASE.equipment.find((device) => device.id === id)!.shortName);
@@ -23,6 +25,8 @@ export class GameUI {
   private lastSavedAt = 0;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private previousFocus: HTMLElement | null = null;
+  private readonly audio = new FeedbackAudio();
+  private draftPlan: EnergyPlan = { ...DEFAULT_ENERGY_PLAN };
 
   constructor(private readonly root: HTMLElement) {
     root.innerHTML = this.shell();
@@ -39,6 +43,7 @@ export class GameUI {
     };
     root.addEventListener('click', (event) => this.handleClick(event));
     root.addEventListener('change', (event) => this.handleChange(event));
+    root.addEventListener('input', (event) => this.handlePlanInput(event));
     document.addEventListener('keydown', (event) => this.handleKey(event));
     window.addEventListener('pagehide', () => this.persist());
     document.addEventListener('visibilitychange', () => {
@@ -80,12 +85,13 @@ export class GameUI {
       <div class="workspace">
         <aside class="case-sidebar" aria-label="Материалы расследования">
           <div class="case-heading"><span class="eyebrow">АКТИВНОЕ РАССЛЕДОВАНИЕ</span><div class="case-number">ДЕЛО <span>001</span><span class="case-tag">В РАБОТЕ</span></div><h1>Школьная<br>аномалия</h1><p>Условная модель СШ №225<br>Минск, кабинет информатики</p></div>
-          <div class="sidebar-section"><div class="section-title">ХОД РАССЛЕДОВАНИЯ <span id="evidence-count">0 / 6</span></div><div class="progress-track"><div id="evidence-progress"></div></div><p class="objective">Осмотрите компьютеры, проектор и сетевое оборудование. Сравните режимы работы.</p><ol class="case-steps"><li id="step-inspect"><span>01</span><div>Собрать свидетельства<small>Три ключевые группы устройств</small></div></li><li id="step-report"><span>02</span><div>Проверить гипотезу<small>Мощность × время работы</small></div></li><li id="step-solved"><span>03</span><div>Составить отчёт<small>Найти безопасное решение</small></div></li></ol></div>
+          <div class="sidebar-section"><div class="section-title">ХОД РАССЛЕДОВАНИЯ <span id="evidence-count">0 / 6</span></div><div class="progress-track"><div id="evidence-progress"></div></div><p class="objective">Осмотрите компьютеры, проектор и сетевое оборудование. Сравните режимы работы.</p><ol class="case-steps"><li id="step-inspect"><span>01</span><div>Собрать свидетельства<small>Три ключевые группы устройств</small></div></li><li id="step-report"><span>02</span><div>Проверить гипотезу<small>Мощность × время работы</small></div></li><li id="step-solved"><span>03</span><div>Проверить решение<small>Лаборатория энергии</small></div></li></ol></div>
           <div class="sidebar-section evidence-section"><div class="section-title">ВАШ БЛОКНОТ ${icon('folder')}</div><div id="evidence-list"></div></div>
-          <div class="sidebar-footer"><button id="report-button" class="button primary full-width" data-action="report" disabled>${icon('folder')} Предварительный отчёт ${icon('arrow')}</button><p id="report-hint" class="report-hint">Сначала соберите ключевые свидетельства</p><div class="save-status" id="save-status">${icon('save')} Автосохранение на этом устройстве</div></div>
+          <div class="sidebar-footer"><button id="report-button" class="button primary full-width" data-action="report" disabled>${icon('folder')} Предварительный отчёт ${icon('arrow')}</button><p id="report-hint" class="report-hint">Сначала соберите ключевые свидетельства</p><button id="plan-button" class="button secondary full-width" data-action="energy-plan" hidden>${icon('bolt')} Лаборатория энергии ${icon('arrow')}</button><div class="save-status" id="save-status">${icon('save')} Автосохранение на этом устройстве</div></div>
         </aside>
         <main class="scene-area">
           <div class="scene-heading"><div><span class="eyebrow">ЛОКАЦИЯ 01 / ИССЛЕДОВАНИЕ</span><h2>Кабинет информатики <span>2 этаж</span></h2></div><div class="room-status"><i></i> СИМУЛЯЦИЯ АКТИВНА</div></div>
+          <div class="mission-strip"><span class="mission-avatar">${icon('search')}</span><div><span id="mission-phase">БЮРО / ЗАДАНИЕ</span><p id="mission-message">Найдите причины лишнего расхода энергии.</p></div><button class="icon-button" data-action="briefing" aria-label="Открыть задание">${icon('folder')}</button></div>
           <div class="room-frame"><div id="room-canvas" role="img" aria-label="Игровой кабинет информатики. Управляйте персонажем WASD или стрелками, E — осмотр." tabindex="0"></div><div class="room-label">${icon('search')} <span>РЕЖИМ ДЕТЕКТИВА</span></div><div class="room-coordinate"><span>N</span><i>↑</i></div><div class="room-scale"><span></span> 1 ИГРОВОЙ МЕТР</div><div class="scan-legend"><i></i> ОБЪЕКТ ДЛЯ ОСМОТРА</div></div>
           <div class="scene-footer"><div id="nearby-hint" class="nearby-hint">${icon('search')} Подойдите к устройству с бирюзовой меткой</div><div class="keyboard-guide"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> движение</span><span><kbd>E</kbd> осмотр</span></div></div>
           <div class="touch-controls" aria-label="Сенсорное управление"><div class="dpad"><button data-direction="up" class="dpad-up" aria-label="Двигаться вверх">↑</button><button data-direction="left" class="dpad-left" aria-label="Двигаться влево">←</button><span class="dpad-center">${icon('search')}</span><button data-direction="right" class="dpad-right" aria-label="Двигаться вправо">→</button><button data-direction="down" class="dpad-down" aria-label="Двигаться вниз">↓</button></div><button id="touch-interact" class="touch-interact" data-action="interact" disabled>${icon('search')}<span>Осмотреть</span></button></div>
@@ -99,7 +105,7 @@ export class GameUI {
           <div class="menu-meta"><span>01 КОМНАТА</span><span>06 ОБЪЕКТОВ</span><span>ОДНА ТАЙНА</span></div>
         </div>
         <div class="menu-case-preview"><div class="preview-cross">+</div><span class="eyebrow">ПЕРВОЕ ДЕЛО</span><h2>Школьная аномалия</h2><p>Минск · Условная модель СШ №225</p><div class="preview-line"><span class="status-dot"></span> НУЖНО ВАШЕ РАССЛЕДОВАНИЕ <span>001</span></div></div>
-        <div class="menu-bottom"><span>УЧИТЕСЬ ЗАМЕЧАТЬ. УЧИТЕСЬ БЕРЕЧЬ.</span><span>ПРОТОТИП / v0.1</span></div>
+        <div class="menu-bottom"><span>УЧИТЕСЬ ЗАМЕЧАТЬ. УЧИТЕСЬ БЕРЕЧЬ.</span><span>ПРОТОТИП / v0.2</span></div>
       </section>
       <div id="modal-layer" class="modal-layer" hidden></div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -127,6 +133,11 @@ export class GameUI {
       case 'report': if (this.progress && canSubmitReport(this.progress)) this.showReport(); break;
       case 'submit-report': this.submitReport(); break;
       case 'retry-report': this.showReport(); break;
+      case 'briefing': this.showBriefing(); break;
+      case 'record-evidence': if (button.dataset.id) this.recordEvidence(button.dataset.id); break;
+      case 'energy-plan': if (this.progress?.reportSolved) this.showEnergyPlan(); break;
+      case 'apply-plan': this.commitEnergyPlan(); break;
+      case 'reset-plan': this.draftPlan = { computerHours: 10, lightingHours: 8 }; this.showEnergyPlan(false); break;
       case 'select-link': this.root.querySelector<HTMLInputElement>('#share-link')?.select(); break;
     }
   }
@@ -142,8 +153,24 @@ export class GameUI {
       this.settings[key] = input.checked;
       const saved = saveSettings(this.settings);
       this.applySettings();
+      if (key === 'soundEnabled' && input.checked) this.audio.play('clue');
       if (!saved) this.toast('Настройки действуют до закрытия страницы: хранилище браузера недоступно.');
     }
+    if (input.id === 'daylight-confirmed') {
+      const range = this.root.querySelector<HTMLInputElement>('#lighting-hours')!;
+      range.disabled = !input.checked;
+      if (!input.checked) { this.draftPlan.lightingHours = 8; range.value = '8'; }
+      this.updatePlanPreview();
+    }
+  }
+
+  private handlePlanInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.id !== 'computer-hours' && input.id !== 'lighting-hours') return;
+    if (!Number.isFinite(input.valueAsNumber)) return;
+    if (input.id === 'computer-hours') this.draftPlan.computerHours = input.valueAsNumber;
+    else this.draftPlan.lightingHours = input.valueAsNumber;
+    this.updatePlanPreview();
   }
 
   private handleKey(event: KeyboardEvent): void {
@@ -180,6 +207,7 @@ export class GameUI {
     if (!this.controller) return;
     this.controller.setReducedMotion(this.settings.reducedMotion);
     this.controller.setInspected(this.progress?.inspectedIds ?? []);
+    this.controller.setEnergyPlan(this.progress?.appliedPlan ?? null);
     this.controller.setPlayerPosition(this.progress?.playerPosition ?? INITIAL_POSITION);
     this.syncActive();
   }
@@ -190,7 +218,7 @@ export class GameUI {
     this.progress = createProgress();
     this.persist();
     this.startGame();
-    this.toast('Дело открыто. Начните с компьютеров, проектора и сетевого оборудования.');
+    this.showBriefing();
   }
 
   private startGame(): void {
@@ -226,6 +254,7 @@ export class GameUI {
     this.root.classList.toggle('reduced-motion', this.settings.reducedMotion);
     this.root.classList.toggle('hide-hints', !this.settings.showHints);
     this.controller?.setReducedMotion(this.settings.reducedMotion);
+    this.audio.setEnabled(this.settings.soundEnabled);
   }
 
   private updateSaveStatus(): void {
@@ -248,7 +277,7 @@ export class GameUI {
     this.root.querySelector<HTMLElement>('#evidence-progress')!.style.width = `${inspected.length / SCHOOL_CASE.equipment.length * 100}%`;
     this.root.querySelector('#step-inspect')!.classList.toggle('complete', eligible);
     this.root.querySelector('#step-report')!.classList.toggle('complete', solved);
-    this.root.querySelector('#step-solved')!.classList.toggle('complete', solved);
+    this.root.querySelector('#step-solved')!.classList.toggle('complete', !!this.progress?.appliedPlan && calculateEnergyPlan(this.progress.appliedPlan).savingsKwh > 0);
     this.root.querySelector('.case-tag')!.textContent = solved ? 'РАСКРЫТО' : 'В РАБОТЕ';
     const list = this.root.querySelector('#evidence-list')!;
     list.innerHTML = SCHOOL_CASE.equipment.map((device) => {
@@ -261,6 +290,24 @@ export class GameUI {
     const missing = SCHOOL_CASE.requiredDeviceIds.filter((id) => !inspected.includes(id)).map((id) => SCHOOL_CASE.equipment.find((device) => device.id === id)!.shortName);
     this.root.querySelector('#report-hint')!.textContent = solved ? `Сценарий изучен · потенциал экономии ${formatEnergy(getInvestigationSavings(this.progress!))} кВт·ч` : eligible ? 'Свидетельства собраны. Проверьте свою гипотезу.' : `Нужно осмотреть: ${missing.join(', ')}`;
     this.controller?.setInspected(inspected);
+    this.controller?.setEnergyPlan(this.progress?.appliedPlan ?? null);
+    this.root.querySelector<HTMLElement>('#plan-button')!.hidden = !solved;
+    const phase = this.root.querySelector('#mission-phase')!;
+    const message = this.root.querySelector('#mission-message')!;
+    if (solved && this.progress?.appliedPlan) {
+      const result = calculateEnergyPlan(this.progress.appliedPlan);
+      phase.textContent = '03 / ПЛАН ПРОВЕРЕН В МОДЕЛИ';
+      message.textContent = `Расчётная экономия: ${formatEnergy(result.savingsKwh)} кВт·ч (${formatEnergy(result.savingsPercent)}%). Остальные устройства продолжают нужную работу.`;
+    } else if (solved) {
+      phase.textContent = '03 / ПРОВЕРЬТЕ РЕШЕНИЕ';
+      message.textContent = 'Причина найдена. Откройте лабораторию энергии и сравните безопасные режимы работы.';
+    } else if (eligible) {
+      phase.textContent = '02 / ПРОВЕРЬТЕ ГИПОТЕЗУ';
+      message.textContent = 'Ключевые свидетельства в блокноте. Какое устройство тратит энергию без пользы? Откройте отчёт.';
+    } else {
+      phase.textContent = '01 / СОБЕРИТЕ УЛИКИ';
+      message.textContent = `Следующая цель: ${missing[0] ?? 'оборудование'}. Подойдите к метке, осмотрите прибор и запишите свидетельство.`;
+    }
     this.updateSaveStatus(); this.updateNearby();
   }
 
@@ -277,16 +324,22 @@ export class GameUI {
   private openEquipment(id: string, inspect: boolean): void {
     const device = SCHOOL_CASE.equipment.find((entry) => entry.id === id);
     if (!device || !this.progress) return;
-    if (inspect) {
-      const fresh = !this.progress.inspectedIds.includes(id);
-      this.progress = inspectEquipment(this.progress, id);
-      this.persist(); this.updateHud();
-      if (fresh) this.toast(`Записано: ${device.shortName}`);
-    }
-    this.showModal(device.name, this.deviceContent(device), `СВИДЕТЕЛЬСТВО / ${this.progress.inspectedIds.indexOf(id) + 1}`);
+    const recorded = this.progress.inspectedIds.includes(id);
+    if (!inspect && !recorded) return;
+    this.showModal(device.name, this.deviceContent(device, recorded), recorded ? `СВИДЕТЕЛЬСТВО / ${this.progress.inspectedIds.indexOf(id) + 1}` : 'СКАНЕР / НОВЫЙ ОБЪЕКТ');
   }
 
-  private deviceContent(device: Equipment): string {
+  private recordEvidence(id: string): void {
+    const device = SCHOOL_CASE.equipment.find((entry) => entry.id === id);
+    if (!device || !this.progress || this.progress.inspectedIds.includes(id) || !this.playing || !this.modalOpen) return;
+    const reportWasAvailable = canSubmitReport(this.progress);
+    this.progress = inspectEquipment(this.progress, id);
+    this.persist(); this.updateHud(); this.audio.play('clue');
+    this.showModal(device.name, this.deviceContent(device, true), `СВИДЕТЕЛЬСТВО / ${this.progress.inspectedIds.indexOf(id) + 1}`);
+    this.toast(!reportWasAvailable && canSubmitReport(this.progress) ? 'Ключевые улики собраны. Теперь можно проверить гипотезу!' : `Улика записана: ${device.shortName}`);
+  }
+
+  private deviceContent(device: Equipment, recorded = true): string {
     const energy = calculateEquipmentEnergy(device, SCHOOL_CASE.workingDays);
     const power = device.mode.powerWatts;
     const totalPower = power * device.quantity;
@@ -294,9 +347,9 @@ export class GameUI {
       <div class="device-stats"><div><span>Мощность одного</span><strong>${power}<small> Вт</small></strong></div><div><span>Работа в день</span><strong>${device.mode.hoursPerDay}<small> ч</small></strong></div><div><span>Количество</span><strong>${device.quantity}<small> шт.</small></strong></div></div>
       <div class="mode-line"><span>Режим работы</span><strong>${escape(device.mode.label)}</strong></div>
       <div class="energy-calculation"><div><span>ЭНЕРГИЯ ЗА ${SCHOOL_CASE.workingDays} УЧЕБНЫХ ДНЕЙ</span><strong>${formatEnergy(energy.monthlyKwh)} <small>кВт·ч</small></strong></div>${icon('bolt')}<p>${power} Вт × ${device.mode.hoursPerDay} ч × ${device.quantity} шт. ÷ 1000 = <b>${formatEnergy(energy.dailyKwh)} кВт·ч / день</b></p><p>${formatEnergy(energy.dailyKwh)} × ${SCHOOL_CASE.workingDays} дней = ${formatEnergy(energy.monthlyKwh)} кВт·ч</p></div>
-      <div class="evidence-note"><span>${icon('search')} НАБЛЮДЕНИЕ ДЕТЕКТИВА</span><p>${escape(device.evidence)}</p></div>
-      <div class="recommendation"><span>${icon('leaf')} БЕЗОПАСНОЕ ИЗМЕНЕНИЕ</span><p>${escape(device.recommendation)}</p>${device.proposedMode ? `<small>Учебная оценка при ${device.proposedMode.hoursPerDay} ч/день и ${device.proposedMode.powerWatts} Вт: до ${formatEnergy(energy.potentialSavingsKwh)} кВт·ч за ${SCHOOL_CASE.workingDays} учебных дней.</small>` : '<small>В сценарии дополнительная экономия для этого режима не заявлена.</small>'}</div>
-      <div class="demo-footnote">${icon('info')} Формула E = P × t / 1000. Для группы устройств учитывается количество. Все характеристики заданы для обучения; это не реальные измерения СШ №225.</div><div class="modal-actions"><button class="button primary" data-action="close">Вернуться к расследованию ${icon('arrow')}</button></div><span class="sr-only">Суммарная мощность группы: ${totalPower} Вт</span>`;
+      <div class="device-timeline"><span>РЕЖИМ НА ШКАЛЕ СУТОК</span><div class="hours-track"><i style="width:${device.mode.hoursPerDay / 24 * 100}%"></i></div><div><small>00:00</small><strong>${device.mode.hoursPerDay} ч работы в день</strong><small>24:00</small></div></div>
+      ${recorded ? `<div class="evidence-note"><span>${icon('search')} НАБЛЮДЕНИЕ ДЕТЕКТИВА</span><p>${escape(device.evidence)}</p></div><div class="recommendation"><span>${icon('leaf')} БЕЗОПАСНОЕ ИЗМЕНЕНИЕ</span><p>${escape(device.recommendation)}</p>${device.proposedMode ? `<small>Учебная оценка при ${device.proposedMode.hoursPerDay} ч/день и ${device.proposedMode.powerWatts} Вт: до ${formatEnergy(energy.potentialSavingsKwh)} кВт·ч за ${SCHOOL_CASE.workingDays} учебных дней.</small>` : '<small>В сценарии дополнительная экономия для этого режима не заявлена.</small>'}</div>` : `<div class="scan-card"><span class="scan-emblem">${icon('search')}</span><div><strong>Характеристики получены</strong><p>Запишите режим работы и наблюдение в блокнот, чтобы использовать их в отчёте.</p></div></div>`}
+      <div class="demo-footnote">${icon('info')} Формула E = P × t / 1000. Для группы устройств учитывается количество. Все характеристики заданы для обучения; это не реальные измерения СШ №225.</div><div class="modal-actions">${recorded ? `<button class="button primary" data-action="close">Вернуться к расследованию ${icon('arrow')}</button>` : `<button class="button secondary" data-action="close">Позже</button><button class="button primary" data-action="record-evidence" data-id="${device.id}">Записать улику ${icon('check')}</button>`}</div><span class="sr-only">Суммарная мощность группы: ${totalPower} Вт</span>`;
   }
 
   private showReport(): void {
@@ -312,6 +365,7 @@ export class GameUI {
     if (!this.progress || !this.selectedOption || !canSubmitReport(this.progress)) return;
     const result = evaluateReport(this.progress, this.selectedOption);
     this.progress = result.progress; this.persist(); this.updateHud();
+    this.audio.play(result.correct ? 'success' : 'retry');
     if (result.correct) this.showSolvedReport(result.explanation);
     else this.showModal('Гипотеза требует пересмотра', `<div class="result-symbol wrong">${icon('search')}</div><p class="result-explanation">${escape(result.explanation)}</p><div class="evidence-note"><span>ПОДСКАЗКА</span><p>Сравните не только ватты, но и часы работы. Отключение должно сохранять безопасность и необходимые функции оборудования.</p></div><div class="modal-actions"><button class="button secondary" data-action="close">В кабинет</button><button class="button primary" data-action="retry-report">Проверить другую гипотезу ${icon('arrow')}</button></div>`, 'ПРОВЕРКА СВИДЕТЕЛЬСТВ');
   }
@@ -319,28 +373,62 @@ export class GameUI {
   private showSolvedReport(explanation?: string): void {
     if (!this.progress) return;
     const savings = getInvestigationSavings(this.progress);
-    this.showModal('Дело раскрыто', `<div class="result-symbol">${icon('check')}</div><p class="result-explanation">${escape(explanation ?? 'Основная причина — длительный простой компьютеров после занятий. Плановое завершение работы и согласованный режим сна сокращают ненужное потребление без помех для уроков. Мониторы также следует переводить в безопасный режим ожидания.')}</p><div class="solved-stat"><span>ПОТЕНЦИАЛ ЭКОНОМИИ В УЧЕБНОМ СЦЕНАРИИ</span><strong>${formatEnergy(savings)} <small>кВт·ч</small></strong><p>за ${SCHOOL_CASE.workingDays} учебных дней · компьютеры и мониторы</p></div><div class="report-conclusion"><p><b>Компьютеры:</b> 6 × 80 Вт × (10 − 2) ч × 20 дней ÷ 1000 = 76,8 кВт·ч.</p><p><b>Мониторы:</b> 6 × 20 Вт × (10 − 2) ч × 20 дней ÷ 1000 = 19,2 кВт·ч.</p><p>Это расчёт возможного изменения режима, а не фактически достигнутая экономия. Сетевое оборудование сохраняет связь, проектор используется на уроках.</p></div><p class="demo-footnote">Можно продолжить исследование и осмотреть остальные объекты. Реальные изменения оборудования выполняют только ответственные сотрудники.</p><div class="modal-actions"><button class="button secondary" data-action="menu">В главное меню</button><button class="button primary" data-action="close">Исследовать дальше ${icon('arrow')}</button></div>`, 'ОТЧЁТ / ДЕЛО 001');
+    this.showModal('Дело раскрыто', `<div class="result-symbol">${icon('check')}</div><p class="result-explanation">${escape(explanation ?? 'Основная причина — длительный простой компьютеров после занятий. Плановое завершение работы и согласованный режим сна сокращают ненужное потребление без помех для уроков. Мониторы также следует переводить в безопасный режим ожидания.')}</p><div class="solved-stat"><span>ПОТЕНЦИАЛ ЭКОНОМИИ В УЧЕБНОМ СЦЕНАРИИ</span><strong>${formatEnergy(savings)} <small>кВт·ч</small></strong><p>за ${SCHOOL_CASE.workingDays} учебных дней · компьютеры и мониторы</p></div><div class="report-conclusion"><p><b>Компьютеры:</b> 6 × 80 Вт × (10 − 2) ч × 20 дней ÷ 1000 = 76,8 кВт·ч.</p><p><b>Мониторы:</b> 6 × 20 Вт × (10 − 2) ч × 20 дней ÷ 1000 = 19,2 кВт·ч.</p><p>Это расчёт возможного изменения режима, а не фактически достигнутая экономия. Сетевое оборудование сохраняет связь, проектор используется на уроках.</p></div><p class="demo-footnote">Можно продолжить исследование и осмотреть остальные объекты. Реальные изменения оборудования выполняют только ответственные сотрудники.</p><div class="modal-actions"><button class="button secondary" data-action="menu">В главное меню</button><button class="button primary" data-action="energy-plan">Проверить решение ${icon('arrow')}</button></div>`, 'ОТЧЁТ / ДЕЛО 001');
   }
 
   private showCases(): void {
     this.showModal('Архив расследований', `<button class="case-card" data-action="case-play"><span class="case-card-icon">${icon('monitor')}</span><span><small>ДЕЛО 001 · ДОСТУПНО</small><strong>Школьная аномалия</strong><span>Кабинет информатики · 6 объектов</span></span>${icon('arrow')}</button><div class="future-note">${icon('lock')}<div><strong>Новые дела — в будущих версиях</strong><p>В этом прототипе доступна одна комната. Другие локации пока не разработаны.</p></div></div><p class="demo-footnote">Первая локация вдохновлена СШ №225 города Минска. Интерьер, планировка и энергетические ситуации вымышлены.</p>`, 'ВЫБОР ДЕЛА');
   }
 
+  private showBriefing(): void {
+    this.showModal('Школьная аномалия', `<div class="dispatch-card"><div class="dispatch-avatar">${icon('leaf')}</div><div><span>СООБЩЕНИЕ ИЗ БЮРО</span><strong>Детектив, энергия оставляет следы.</strong></div></div><p class="briefing-story">В учебной модели кабинет уже опустел, а часть техники продолжает расходовать энергию. У каждого прибора своя история: один нужен для связи, другой — для уроков, третий слишком долго ждёт следующего занятия.</p><div class="briefing-goals"><div><b>01</b><strong>Соберите улики</strong><small>Подойдите к компьютерам, проектору и сетевому узлу. Осмотрите их и запишите наблюдения.</small></div><div><b>02</b><strong>Найдите причину</strong><small>Сравните мощность, количество устройств и время работы. Проверьте гипотезу в отчёте.</small></div><div><b>03</b><strong>Проверьте решение</strong><small>Настройте режимы в лаборатории энергии и узнайте расчётную экономию.</small></div></div><p class="demo-footnote">${icon('info')} Вдохновлено СШ №225 Минска. Планировка, характеристики и события вымышлены. Модель не управляет настоящим школьным оборудованием.</p><div class="briefing-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> или стрелки</span><span><kbd>E</kbd> осмотреть</span><small>На телефоне — крестовина и кнопка осмотра.</small></div><div class="modal-actions"><button class="button primary" data-action="close">${this.playing ? 'К расследованию' : 'Понятно'} ${icon('arrow')}</button></div>`, 'ДЕЛО №001 / ВАШЕ ЗАДАНИЕ', 'wide-modal');
+  }
+
+  private showEnergyPlan(loadSaved = true): void {
+    if (!this.progress?.reportSolved) return;
+    if (loadSaved) this.draftPlan = { ...(this.progress.appliedPlan ?? DEFAULT_ENERGY_PLAN) };
+    const daylight = this.draftPlan.lightingHours < 8;
+    this.showModal('Лаборатория энергии', `<p class="modal-intro">Причина найдена. Теперь проверьте решение: двигайте ползунки и сравнивайте режимы в учебной модели.</p><div class="lab-controls"><label class="lab-range" for="computer-hours"><span>${icon('computer')} <strong>Компьютеры и мониторы</strong><output id="computer-hours-output">${this.draftPlan.computerHours} ч/день</output></span><input id="computer-hours" type="range" min="2" max="10" step="1" value="${this.draftPlan.computerHours}" /><small>2 часа сохраняем для занятий. Лишнее ожидание после уроков можно сократить после сохранения файлов и согласования с учителем.</small><span class="range-endpoints"><i>2 ч · только нужная работа</i><i>10 ч · исходный режим</i></span></label><label class="daylight-option"><input id="daylight-confirmed" type="checkbox" ${daylight ? 'checked' : ''} /><span>${icon('lighting')} В этой модели достаточно дневного света<small>Сокращать освещение можно только при достаточной освещённости. В тёмное время сохраняем исходный режим.</small></span></label><label class="lab-range" for="lighting-hours"><span><strong>Освещение кабинета</strong><output id="lighting-hours-output">${this.draftPlan.lightingHours} ч/день</output></span><input id="lighting-hours" type="range" min="4" max="8" step="1" value="${this.draftPlan.lightingHours}" ${daylight ? '' : 'disabled'} /><span class="range-endpoints"><i>4 ч · при дневном свете</i><i>8 ч · исходный режим</i></span></label></div><div class="lab-protected">${icon('lock')} <span><strong>Нужные функции сохраняются</strong><small>Проектор: 2 ч уроков. Компьютер учителя: 2 ч. Сетевой узел: непрерывная связь. Их режимы здесь не меняем.</small></span></div><div id="plan-preview" class="plan-preview" aria-live="polite" aria-atomic="true"></div><p class="demo-footnote">E = P × t × количество × ${SCHOOL_CASE.workingDays} дней / 1000. Считаем выбранные учебные дни, а не весь календарный месяц. Это модель возможных режимов; результат не является фактической экономией школы.</p><div class="modal-actions"><button class="button secondary" data-action="reset-plan">Исходные режимы</button><button id="apply-plan" class="button primary" data-action="apply-plan">Проверить в комнате ${icon('arrow')}</button></div>`, 'ЭТАП 03 / БЕЗОПАСНЫЙ ПЛАН', 'wide-modal');
+    this.updatePlanPreview();
+  }
+
+  private updatePlanPreview(): void {
+    const target = this.root.querySelector('#plan-preview');
+    if (!target) return;
+    const result = calculateEnergyPlan(this.draftPlan);
+    this.root.querySelector('#computer-hours-output')!.textContent = `${this.draftPlan.computerHours} ч/день`;
+    this.root.querySelector('#lighting-hours-output')!.textContent = `${this.draftPlan.lightingHours} ч/день`;
+    target.innerHTML = `<div class="plan-comparison"><div><span>ИСХОДНЫЙ РАСХОД</span><strong>${formatEnergy(result.baselineKwh)} <small>кВт·ч</small></strong><i class="energy-bar"><b style="width:100%"></b></i></div><div><span>С ВАШИМ ПЛАНОМ</span><strong>${formatEnergy(result.monthlyKwh)} <small>кВт·ч</small></strong><i class="energy-bar"><b style="width:${result.monthlyKwh / result.baselineKwh * 100}%"></b></i></div></div><div class="plan-saving"><span>${icon('leaf')} РАСЧЁТНАЯ ЭКОНОМИЯ</span><strong>${formatEnergy(result.savingsKwh)} <small>кВт·ч</small></strong><b>−${formatEnergy(result.savingsPercent)}%</b></div><div class="plan-breakdown"><span>Компьютеры + мониторы <b>${formatEnergy(result.computerSavingsKwh)} кВт·ч</b></span><span>Освещение <b>${formatEnergy(result.lightingSavingsKwh)} кВт·ч</b></span></div>`;
+  }
+
+  private commitEnergyPlan(): void {
+    if (!this.progress?.reportSolved) return;
+    if (this.draftPlan.lightingHours < 8 && !this.root.querySelector<HTMLInputElement>('#daylight-confirmed')?.checked) {
+      this.toast('Сначала подтвердите достаточное дневное освещение в модели.'); return;
+    }
+    this.progress = applyEnergyPlan(this.progress, this.draftPlan);
+    this.persist(); this.updateHud(); this.audio.play('apply');
+    const result = calculateEnergyPlan(this.draftPlan);
+    const complete = this.progress.inspectedIds.length === SCHOOL_CASE.equipment.length;
+    this.showModal(result.savingsKwh > 0 ? 'Энергия под контролем' : 'Исходные режимы восстановлены', `<div class="result-symbol">${icon(result.savingsKwh > 0 ? 'leaf' : 'bolt')}</div><div class="detective-rank"><span>ВАШЕ ДОСЬЕ</span><strong>${complete ? 'Внимательный аналитик' : 'Энергетический детектив'}</strong><p>${this.progress.inspectedIds.length} / 6 объектов исследовано · гипотез проверено: ${this.progress.reportAttempts}</p></div><div class="solved-stat"><span>ПОТЕНЦИАЛ ВЫБРАННОГО ПЛАНА</span><strong>${formatEnergy(result.savingsKwh)} <small>кВт·ч</small></strong><p>−${formatEnergy(result.savingsPercent)}% за ${SCHOOL_CASE.workingDays} учебных дней</p></div><p class="result-explanation">Режимы изменены в игровой модели. Экраны показывают сокращение ожидания, а связь и необходимые занятия продолжаются. Расчётный расход: ${formatEnergy(result.baselineKwh)} → ${formatEnergy(result.monthlyKwh)} кВт·ч.</p><p class="demo-footnote">Сохранение включает выбранный план. ${complete ? 'Все свидетельства собраны — сравните другие безопасные режимы в лаборатории.' : 'Дополнительная цель: исследуйте все шесть объектов, чтобы открыть достижение «Внимательный детектив».'} Изменения в реальной школе выполняют ответственные сотрудники.</p><div class="modal-actions"><button class="button secondary" data-action="energy-plan">Изменить план</button><button class="button primary" data-action="close">Вернуться в комнату ${icon('arrow')}</button></div>`, 'РЕЗУЛЬТАТ / УЧЕБНАЯ СИМУЛЯЦИЯ');
+  }
+
   private showAchievements(): void {
     const achievements = [
       { title: 'Первый след', description: 'Осмотреть одно устройство', earned: !!this.progress?.inspectedIds.length, symbol: 'search' },
       { title: 'Внимательный детектив', description: 'Исследовать все шесть объектов', earned: this.progress?.inspectedIds.length === 6, symbol: 'folder' },
-      { title: 'Энергия под контролем', description: 'Правильно составить отчёт по делу', earned: !!this.progress?.reportSolved, symbol: 'bolt' },
+      { title: 'Дело раскрыто', description: 'Правильно составить отчёт по делу', earned: !!this.progress?.reportSolved, symbol: 'check' },
+      { title: 'Энергия под контролем', description: 'Проверить план с положительной экономией', earned: !!this.progress?.appliedPlan && calculateEnergyPlan(this.progress.appliedPlan).savingsKwh > 0, symbol: 'leaf' },
     ];
-    this.showModal('Ваши достижения', `<div class="achievements">${achievements.map((item) => `<div class="achievement ${item.earned ? 'earned' : ''}"><span>${icon(item.symbol)}</span><div><strong>${item.title}</strong><small>${item.description}</small></div>${icon(item.earned ? 'check' : 'lock')}</div>`).join('')}</div><p class="demo-footnote">Эти три достижения работают в текущем прохождении и сохраняются локально. Расширенная коллекция появится в будущих версиях.</p>`, 'ЛИЧНОЕ ДОСЬЕ');
+    this.showModal('Ваши достижения', `<div class="achievements">${achievements.map((item) => `<div class="achievement ${item.earned ? 'earned' : ''}"><span>${icon(item.symbol)}</span><div><strong>${item.title}</strong><small>${item.description}</small></div>${icon(item.earned ? 'check' : 'lock')}</div>`).join('')}</div><p class="demo-footnote">Эти четыре достижения работают в текущем прохождении и сохраняются локально. Расширенная коллекция появится в будущих версиях.</p>`, 'ЛИЧНОЕ ДОСЬЕ');
   }
 
   private showSettings(): void {
-    this.showModal('Настройки', `<label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук и переназначение клавиш пока не реализованы. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
+    this.showModal('Настройки', `<label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Звуки расследования</strong><small>Тихие сигналы новых улик, гипотез и результатов</small></span><input type="checkbox" data-setting="soundEnabled" ${this.settings.soundEnabled ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук включается вами и создаётся локально. Переназначение клавиш пока не реализовано. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
   }
 
   private showHelp(): void {
-    this.showModal('Как вести расследование', `<div class="help-steps"><p><span>01</span><strong>Перемещайтесь по кабинету</strong><small>WASD или стрелки. На сенсорном экране используйте крестовину.</small></p><p><span>02</span><strong>Изучайте устройства</strong><small>Подойдите к бирюзовой метке и нажмите E, саму метку или кнопку «Осмотреть». Стены и мебель ограничивают движение.</small></p><p><span>03</span><strong>Сравнивайте свидетельства</strong><small>Осмотрите: ${requiredNames().join(', ')}. Повторно открыть изученные данные можно в блокноте.</small></p><p><span>04</span><strong>Проверьте гипотезу в отчёте</strong><small>Энергия = мощность × время ÷ 1000. Учтите длительность работы и безопасность изменения режима.</small></p></div><p class="demo-footnote">Esc закрывает панель, повторный Esc возвращает в меню. Прогресс сохраняется автоматически. ${formatEnergy(getMonthlyBaseline())} кВт·ч — суммарный пример для всех объектов за ${SCHOOL_CASE.workingDays} учебных дней, не школьные измерения.</p><div class="modal-actions"><button class="button primary" data-action="close">Всё понятно ${icon('check')}</button></div>`, 'РУКОВОДСТВО ДЕТЕКТИВА');
+    this.showModal('Как вести расследование', `<div class="help-steps"><p><span>01</span><strong>Перемещайтесь по кабинету</strong><small>WASD или стрелки. На сенсорном экране используйте крестовину.</small></p><p><span>02</span><strong>Изучайте устройства</strong><small>Подойдите к бирюзовой метке и нажмите E, саму метку или кнопку «Осмотреть». Стены и мебель ограничивают движение.</small></p><p><span>03</span><strong>Сравнивайте свидетельства</strong><small>Осмотрите: ${requiredNames().join(', ')}. Нажмите «Записать улику» в панели прибора. Повторно открыть данные можно в блокноте.</small></p><p><span>04</span><strong>Проверьте гипотезу в отчёте</strong><small>Энергия = мощность × время ÷ 1000. Учтите длительность работы и безопасность изменения режима.</small></p><p><span>05</span><strong>Проверьте безопасный план</strong><small>После верного отчёта откройте лабораторию энергии, сравните режимы ползунками и проверьте результат в комнате.</small></p></div><p class="demo-footnote">Esc закрывает панель, повторный Esc возвращает в меню. Прогресс сохраняется автоматически. ${formatEnergy(getMonthlyBaseline())} кВт·ч — суммарный пример для всех объектов за ${SCHOOL_CASE.workingDays} учебных дней, не школьные измерения.</p><div class="modal-actions"><button class="button primary" data-action="close">Всё понятно ${icon('check')}</button></div>`, 'РУКОВОДСТВО ДЕТЕКТИВА');
   }
 
   private showModal(title: string, body: string, eyebrow: string, className = ''): void {

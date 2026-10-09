@@ -25,6 +25,14 @@ export class Player {
       art.fillRoundedRect(20, 24, 20, 21, 6);
       art.fillStyle(0x276e86);
       art.fillRoundedRect(25, 28, 10, 17, 3);
+      art.lineStyle(1, 0x175268, 0.9);
+      art.lineBetween(30, 28, 30, 44);
+      art.fillStyle(0xe9d69a);
+      art.fillRoundedRect(22, 31, 5, 6, 1);
+      art.fillStyle(0x162c3d);
+      art.fillRoundedRect(39, 35, 11, 13, 2);
+      art.fillStyle(0x82e9d5);
+      art.fillRoundedRect(41, 37, 7, 8, 1);
       art.fillStyle(0x92e5da);
       art.fillRoundedRect(14, 27, 5, 10, 2);
       art.fillRoundedRect(41, 27, 5, 10, 2);

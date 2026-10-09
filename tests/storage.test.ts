@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import { INITIAL_POSITION } from '../src/data/schoolCase';
 import { clearProgress, createProgress, loadProgress, loadSettings, PROGRESS_STORAGE_KEY, saveProgress, saveSettings, SETTINGS_STORAGE_KEY } from '../src/systems/storage';
 import { evaluateReport, inspectEquipment } from '../src/systems/investigation';
+import { applyEnergyPlan, DEFAULT_ENERGY_PLAN } from '../src/systems/energyPlan';
 import type { Progress } from '../src/types';
 
 class MemoryStorage implements Storage {
@@ -51,6 +52,32 @@ describe('local progress persistence', () => {
     assert.deepEqual(loadProgress(), progress);
     assert.equal(clearProgress(), true);
     assert.equal(loadProgress(), null);
+  });
+
+  it('preserves old version-one saves and round trips an applied plan', () => {
+    let progress = createProgress();
+    for (const id of ['pc-bank', 'projector', 'network']) progress = inspectEquipment(progress, id);
+    progress = evaluateReport(progress, 'idle-computers').progress;
+    writeRaw(progress);
+    assert.deepEqual(loadProgress(), progress);
+    assert.equal(loadProgress()!.appliedPlan, undefined);
+    const planned = applyEnergyPlan(progress, DEFAULT_ENERGY_PLAN);
+    assert.equal(saveProgress(planned), true);
+    assert.deepEqual(loadProgress(), planned);
+  });
+
+  it('omits invalid or premature plans without losing valid investigation progress', () => {
+    let progress = createProgress();
+    writeRaw({ ...progress, appliedPlan: DEFAULT_ENERGY_PLAN });
+    assert.deepEqual(loadProgress(), progress);
+    for (const id of ['pc-bank', 'projector', 'network']) progress = inspectEquipment(progress, id);
+    progress = evaluateReport(progress, 'idle-computers').progress;
+    for (const invalid of [null, [], {}, { computerHours: 0, lightingHours: 8 }, { computerHours: 2, lightingHours: 3 }, { computerHours: '2', lightingHours: 8 }]) {
+      writeRaw({ ...progress, appliedPlan: invalid });
+      assert.deepEqual(loadProgress(), progress);
+    }
+    writeRaw({ ...progress, appliedPlan: { ...DEFAULT_ENERGY_PLAN, ignoredField: true } });
+    assert.deepEqual(loadProgress()!.appliedPlan, DEFAULT_ENERGY_PLAN);
   });
 
   it('rejects corrupt JSON, incompatible cases, versions and unbounded counters', () => {
@@ -108,17 +135,21 @@ describe('local progress persistence', () => {
     assert.equal(saveProgress(createProgress()), false);
     assert.equal(clearProgress(), false);
     assert.equal(loadProgress(), null);
-    assert.equal(saveSettings({ reducedMotion: true, showHints: false }), false);
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true });
+    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true }), false);
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
   });
 
   it('validates settings and defaults missing or corrupt fields', () => {
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true });
-    assert.equal(saveSettings({ reducedMotion: true, showHints: false }), true);
-    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
+    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true }), true);
+    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: true });
+    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ reducedMotion: true, showHints: false }));
+    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: false });
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ reducedMotion: 'yes', showHints: false }));
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: false, soundEnabled: false });
+    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ soundEnabled: 'yes' }));
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
     storage.setItem(SETTINGS_STORAGE_KEY, 'broken-json');
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
   });
 });

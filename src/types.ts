@@ -22,6 +22,9 @@ export type Equipment = {
 
 export type ReportOption = { id: string; title: string; description: string };
 
+/** A safe schedule for the fictional classroom, never a command to real devices. */
+export type EnergyPlan = { computerHours: number; lightingHours: number };
+
 export type CaseData = {
   id: string;
   title: string;
@@ -42,9 +45,10 @@ export type Progress = {
   reportSolved: boolean;
   reportAttempts: number;
   updatedAt: string;
+  appliedPlan?: EnergyPlan;
 };
 
-export type Settings = { reducedMotion: boolean; showHints: boolean };
+export type Settings = { reducedMotion: boolean; showHints: boolean; soundEnabled: boolean };
 
 export type GameBridge = {
   onReady: () => void;
@@ -60,5 +64,6 @@ export type RoomController = {
   setTouchDirection: (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => void;
   interact: () => void;
   setReducedMotion: (reduced: boolean) => void;
+  setEnergyPlan: (plan: EnergyPlan | null) => void;
   getPlayerPosition: () => Point;
 };

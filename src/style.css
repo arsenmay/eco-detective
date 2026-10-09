@@ -398,3 +398,113 @@ kbd { display: inline-grid; place-items: center; font-family: inherit; font-size
   .achievement small { font-size: 8px; line-height: 1.5; }
 }
 @media (max-width: 375px) { .topbar { padding: 0 10px; } .brand { font-size: 12px; } .brand small { font-size: 4px; } .menu-title { font-size: 55px; } .menu-kicker { letter-spacing: 1px; } .menu-links { gap: 6px; } .menu-links .icon { width: 12px; height: 12px; } .scene-heading h2 > span { display: none; } }
+
+/* Investigation feedback and the interactive, fictional energy laboratory. */
+.scene-heading { margin-bottom: 15px; }
+.mission-strip { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid #355b60; border-left: 3px solid var(--accent); border-radius: 7px; background: linear-gradient(105deg, #193838d9, #14283aaa); flex-shrink: 0; }
+.mission-avatar { display: grid; place-items: center; width: 33px; height: 33px; border: 1px solid #497c70; border-radius: 50%; color: var(--accent); flex-shrink: 0; }
+.mission-avatar .icon { width: 17px; height: 17px; }
+.mission-strip > div { flex: 1; min-width: 0; }
+.mission-strip div > span { color: #85c9b7; font-size: 7px; letter-spacing: 1.6px; }
+.mission-strip p { color: #b7cfd5; font-size: 11px; line-height: 1.6; margin: 5px 0 0; }
+.mission-strip .icon-button { width: 32px; height: 32px; background: #183439; flex-shrink: 0; }
+.mission-strip .icon-button .icon { width: 16px; height: 16px; }
+.menu-mode .mission-strip { display: none; }
+#plan-button { margin: 0 0 16px; border-color: #477c74; color: #a3deca; }
+.scan-card { display: flex; gap: 16px; align-items: center; border: 1px solid #38686a; border-radius: 9px; background: #183638; margin: 22px 0; padding: 18px; }
+.scan-emblem { color: var(--accent); width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #589f87; border-radius: 50%; box-shadow: 0 0 0 6px #67dfbe0d; flex-shrink: 0; animation: scanner-pulse 2.5s ease-in-out infinite; }
+.scan-card strong { font-size: 13px; font-weight: 550; color: #c3e3db; }
+.scan-card p { font-size: 11px; line-height: 1.7; color: #83adae; margin: 7px 0 0; }
+.device-timeline { margin-top: 22px; }
+.device-timeline > span { font-size: 7px; letter-spacing: 1.5px; color: #80a2b5; }
+.hours-track { height: 7px; margin-top: 12px; border-radius: 4px; background: repeating-linear-gradient(90deg, #243c4c 0, #243c4c calc(100% / 24 - 2px), #142638 calc(100% / 24 - 2px), #142638 calc(100% / 24)); overflow: hidden; }
+.hours-track > i { display: block; height: 100%; background: linear-gradient(90deg, #339c90, #8ee6c0); border-radius: inherit; }
+.device-timeline > div:last-child { display: flex; justify-content: space-between; align-items: center; color: #6f91a6; margin-top: 8px; }
+.device-timeline small, .device-timeline strong { font-size: 9px; font-weight: 400; }
+.device-timeline strong { color: #a0c8be; }
+.dispatch-card { display: flex; gap: 16px; align-items: center; padding: 18px; background: #1b3e3d; border: 1px solid #3c7668; border-radius: 10px; margin-bottom: 23px; }
+.dispatch-avatar { width: 47px; height: 47px; border-radius: 9px 2px 9px 2px; border: 1px solid #559b83; display: grid; place-items: center; color: var(--accent); flex-shrink: 0; }
+.dispatch-avatar .icon { width: 29px; height: 29px; }
+.dispatch-card span { display: block; font-size: 7px; letter-spacing: 1.8px; color: #83bca9; margin-bottom: 9px; }
+.dispatch-card strong { font-size: 14px; font-weight: 500; color: #d4eee4; line-height: 1.5; }
+.briefing-goals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 24px 0; }
+.briefing-goals > div { padding: 17px 14px; border: 1px solid #355465; background: #142839; border-radius: 8px; }
+.briefing-goals b { display: block; font-size: 23px; font-weight: 350; color: #72d7b7; margin-bottom: 15px; }
+.briefing-goals strong { display: block; font-size: 11px; font-weight: 550; color: #d0dedf; }
+.briefing-goals small { display: block; color: #83a0b2; font-size: 10px; line-height: 1.75; margin-top: 9px; }
+.briefing-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 22px; font-size: 10px; color: #91aabd; }
+.briefing-controls > span { display: flex; align-items: center; gap: 4px; }
+.briefing-controls small { width: 100%; color: #6f91a6; font-size: 10px; }
+.lab-controls { margin: 24px 0; }
+.lab-range { display: block; padding: 20px; border: 1px solid #365564; background: #142a3a; border-radius: 9px; }
+.lab-range > span:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #b9d7d8; }
+.lab-range .icon { width: 17px; height: 17px; color: var(--accent); }
+.lab-range strong { font-weight: 550; }
+.lab-range output { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); background: #20493f; padding: 7px 10px; border-radius: 5px; white-space: nowrap; }
+.lab-range input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; margin: 18px 0 10px; cursor: pointer; }
+.lab-range input:disabled { opacity: .35; cursor: default; }
+.lab-range > small { display: block; font-size: 10px; line-height: 1.7; color: #809eb2; }
+.range-endpoints { display: flex; justify-content: space-between; gap: 18px; margin-top: 10px; font-size: 8px; color: #759bae; }
+.range-endpoints i { font-style: normal; }
+.range-endpoints i:last-child { text-align: right; }
+.daylight-option { display: flex; gap: 12px; align-items: flex-start; padding: 20px 4px; cursor: pointer; font-size: 11px; color: #c5dcd6; }
+.daylight-option > input { width: 19px; height: 19px; margin: 0; accent-color: var(--accent); flex-shrink: 0; }
+.daylight-option .icon { width: 17px; height: 17px; color: #dbc58b; margin-right: 3px; }
+.daylight-option small { display: block; font-size: 10px; line-height: 1.7; color: #819fb0; margin-top: 8px; }
+.lab-protected { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 7px; background: #222e3b; border: 1px solid #3c4f5c; color: #8aaaba; }
+.lab-protected > .icon { width: 17px; height: 17px; color: #adbcce; margin-top: 2px; }
+.lab-protected strong { display: block; color: #bacfda; font-size: 11px; font-weight: 500; }
+.lab-protected small { display: block; font-size: 10px; line-height: 1.7; margin-top: 6px; }
+.plan-preview { border: 1px solid #427c68; border-radius: 9px; background: linear-gradient(145deg, #1a3a37, #152d35); padding: 21px; margin: 22px 0 18px; }
+.plan-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.plan-comparison span { display: block; color: #84aba9; font-size: 7px; letter-spacing: 1px; }
+.plan-comparison strong { display: block; font-size: 25px; font-weight: 450; margin: 12px 0; font-variant-numeric: tabular-nums; }
+.plan-comparison strong small { font-size: 10px; color: #8bacb1; }
+.energy-bar { height: 6px; border-radius: 3px; background: #102733; display: block; overflow: hidden; }
+.energy-bar b { display: block; height: 100%; background: #7194a8; border-radius: inherit; transition: width .15s; }
+.plan-comparison > div:last-child .energy-bar b { background: var(--accent); }
+.plan-saving { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 23px 0 18px; border-bottom: 1px solid #42685b; }
+.plan-saving > span { display: flex; align-items: center; gap: 7px; width: 100%; font-size: 7px; letter-spacing: 1.2px; color: #99c7b5; }
+.plan-saving .icon { width: 17px; height: 17px; }
+.plan-saving strong { color: var(--accent); font-size: 40px; font-weight: 450; font-variant-numeric: tabular-nums; }
+.plan-saving strong small { font-size: 13px; color: #a3cbbb; }
+.plan-saving > b { margin-left: auto; color: var(--accent); font-weight: 550; font-size: 17px; padding: 8px 10px; border: 1px solid #497f6b; border-radius: 6px; background: #234c40; }
+.plan-breakdown { display: grid; gap: 9px; padding-top: 16px; }
+.plan-breakdown > span { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; color: #8eafa9; }
+.plan-breakdown b { font-weight: 500; color: #b2d5c4; white-space: nowrap; }
+.detective-rank { text-align: center; }
+.detective-rank > span { color: #809eaf; font-size: 7px; letter-spacing: 2px; }
+.detective-rank > strong { display: block; color: #c8e4db; font-size: 22px; font-weight: 500; margin-top: 10px; }
+.detective-rank > p { color: #7b9baa; font-size: 10px; margin: 12px 0 0; }
+@keyframes scanner-pulse { 50% { box-shadow: 0 0 0 10px #67dfbe06; } }
+@media (pointer: coarse), (max-width: 720px) {
+  .dpad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 40px); gap: 4px; }
+  .topbar .icon-button { width: 36px; height: 36px; }
+  .menu-links button { min-height: 38px; }
+  .inline-interact { min-height: 36px; }
+}
+@media (max-width: 720px) {
+  .mission-strip { padding: 10px; gap: 9px; margin-bottom: 13px; }
+  .mission-strip p { font-size: 9px; }
+  .mission-strip div > span { font-size: 6px; letter-spacing: 1px; }
+  .mission-avatar { width: 29px; height: 29px; }
+  .briefing-goals { grid-template-columns: 1fr; gap: 8px; }
+  .briefing-goals > div { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 5px 12px; padding: 14px; }
+  .briefing-goals b { grid-row: 1 / 3; margin: 0; font-size: 21px; }
+  .briefing-goals small { margin: 0; }
+  .dispatch-card { padding: 14px; gap: 12px; }
+  .dispatch-card strong { font-size: 12px; }
+  .dispatch-avatar { width: 38px; height: 42px; }
+  .lab-range { padding: 15px; }
+  .lab-range > span:first-child { font-size: 10px; }
+  .lab-range output { font-size: 10px; }
+  .plan-preview { padding: 16px; }
+  .plan-comparison { gap: 13px; }
+  .plan-comparison strong { font-size: 22px; }
+  .plan-comparison span { font-size: 6px; letter-spacing: .5px; }
+  .plan-saving strong { font-size: 34px; }
+  .plan-saving > b { font-size: 14px; }
+  .plan-breakdown > span { font-size: 9px; }
+  .detective-rank > strong { font-size: 19px; }
+}
+@media (max-width: 375px) { .topbar-right { gap: 4px; } .topbar .icon-button { width: 32px; height: 36px; } .lab-range output { margin-left: 0; } .plan-saving { gap: 10px; } .plan-saving strong small { font-size: 10px; } }
