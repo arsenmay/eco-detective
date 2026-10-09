@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Point } from '../types';
+import { capMovementVector } from './cameraLayout';
 
 export const PLAYER_SPEED = 184;
 
@@ -63,14 +64,15 @@ export class Player {
   }
 
   move(horizontal: number, vertical: number): boolean {
-    const length = Math.hypot(horizontal, vertical);
+    const vector = capMovementVector(horizontal, vertical);
+    const length = Math.hypot(vector.x, vector.y);
     this.moving = length > 0;
     if (!this.moving) {
       this.sprite.setVelocity(0, 0);
       return false;
     }
-    const vx = (horizontal / length) * PLAYER_SPEED;
-    const vy = (vertical / length) * PLAYER_SPEED;
+    const vx = vector.x * PLAYER_SPEED;
+    const vy = vector.y * PLAYER_SPEED;
     this.sprite.setVelocity(vx, vy);
     this.sprite.setRotation(Math.atan2(vy, vx) + Math.PI / 2);
     return true;

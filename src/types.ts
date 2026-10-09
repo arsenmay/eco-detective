@@ -48,7 +48,7 @@ export type Progress = {
   appliedPlan?: EnergyPlan;
 };
 
-export type Settings = { reducedMotion: boolean; showHints: boolean; soundEnabled: boolean };
+export type Settings = { reducedMotion: boolean; showHints: boolean; soundEnabled: boolean; joystickSensitivity: number };
 
 export type GameBridge = {
   onReady: () => void;
@@ -62,6 +62,8 @@ export type RoomController = {
   setPlayerPosition: (position: Point) => void;
   setInspected: (ids: readonly string[]) => void;
   setTouchDirection: (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => void;
+  setTouchVector: (vector: Point) => void;
+  changeZoom: (delta: number) => void;
   interact: () => void;
   setReducedMotion: (reduced: boolean) => void;
   setEnergyPlan: (plan: EnergyPlan | null) => void;

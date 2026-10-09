@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import type { EnergyPlan, Equipment, GameBridge, Point } from '../types';
 import { InteractionSystem } from './InteractionSystem';
 import { Player } from './Player';
-import { applyRoomEnergyPlan, drawRoom, FURNITURE, ROOM_BOUNDS, safePlayerPosition, SPAWN, type RoomArtwork } from './roomArtwork';
+import { calculateCameraLayout, capMovementVector } from './cameraLayout';
+import { applyRoomEnergyPlan, drawRoom, FURNITURE, ROOM_BOUNDS, safePlayerPosition, SPAWN, WORLD_HEIGHT, WORLD_WIDTH, type RoomArtwork } from './roomArtwork';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -26,6 +27,9 @@ export class RoomScene extends Phaser.Scene {
   private lastReportedPosition: Point = { ...SPAWN };
   private lastPositionTime = 0;
   private wasMoving = false;
+  private touchVector: Point = { x: 0, y: 0 };
+  private viewport = { width: WORLD_WIDTH, height: WORLD_HEIGHT, mobile: false };
+  private zoomOffset = 0;
   private readonly touch: Record<Direction, boolean> = { up: false, down: false, left: false, right: false };
   private readonly capturedKeys = ['W', 'A', 'S', 'D', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'E'];
 
@@ -65,6 +69,7 @@ export class RoomScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
     this.syncInputState();
+    this.configureCamera();
     this.bridge.onReady();
   }
 
@@ -72,11 +77,15 @@ export class RoomScene extends Phaser.Scene {
     if (!this.player || !this.interactions) return;
     let moving = false;
     if (this.isActive()) {
-      const horizontal = Number(this.keyDown('D') || this.keyDown('RIGHT') || this.touch.right)
+      const keyboardHorizontal = Number(this.keyDown('D') || this.keyDown('RIGHT') || this.touch.right)
         - Number(this.keyDown('A') || this.keyDown('LEFT') || this.touch.left);
-      const vertical = Number(this.keyDown('S') || this.keyDown('DOWN') || this.touch.down)
+      const keyboardVertical = Number(this.keyDown('S') || this.keyDown('DOWN') || this.touch.down)
         - Number(this.keyDown('W') || this.keyDown('UP') || this.touch.up);
-      moving = this.player.move(horizontal, vertical);
+      const hasDigitalInput = keyboardHorizontal !== 0 || keyboardVertical !== 0;
+      moving = this.player.move(
+        hasDigitalInput ? keyboardHorizontal : this.touchVector.x,
+        hasDigitalInput ? keyboardVertical : this.touchVector.y,
+      );
       this.updateNearby();
     } else {
       this.player.stop();
@@ -109,6 +118,7 @@ export class RoomScene extends Phaser.Scene {
     this.clearControls();
     this.syncInputState();
     this.updateNearby();
+    this.configureCamera();
   }
 
   setPlayerPosition(position: Point): void {
@@ -117,6 +127,7 @@ export class RoomScene extends Phaser.Scene {
     this.clearControls();
     this.reportPosition();
     this.updateNearby();
+    this.configureCamera();
   }
 
   getPlayerPosition(): Point {
@@ -139,9 +150,28 @@ export class RoomScene extends Phaser.Scene {
     this.touch[direction] = pressed && this.isActive();
   }
 
+  setTouchVector(vector: Point): void {
+    this.touchVector = this.isActive() ? capMovementVector(vector.x, vector.y) : { x: 0, y: 0 };
+  }
+
+  setViewport(width: number, height: number, mobile: boolean): void {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+    this.viewport = { width, height, mobile };
+    this.configureCamera();
+  }
+
+  changeZoom(delta: number): void {
+    if (!Number.isFinite(delta)) return;
+    const layout = calculateCameraLayout({ ...this.viewport, zoomOffset: this.zoomOffset });
+    const zoom = Math.max(layout.minZoom, Math.min(layout.maxZoom, layout.zoom + delta));
+    this.zoomOffset = zoom - (this.viewport.mobile ? 1 : layout.fitZoom);
+    this.configureCamera();
+  }
+
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
     this.interactions?.setReducedMotion(reduced);
+    this.cameras?.main?.setLerp(reduced ? 1 : 0.12);
   }
 
   setEnergyPlan(plan: EnergyPlan | null): void {
@@ -180,6 +210,7 @@ export class RoomScene extends Phaser.Scene {
 
   private clearControls(): void {
     for (const direction of Object.keys(this.touch) as Direction[]) this.touch[direction] = false;
+    this.touchVector = { x: 0, y: 0 };
     this.input?.keyboard?.resetKeys();
     this.player?.stop();
     this.reportPosition();
@@ -191,6 +222,21 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard.enabled = this.isActive();
     if (this.isActive()) this.input.keyboard.addCapture(this.capturedKeys);
     else this.input.keyboard.removeCapture(this.capturedKeys);
+  }
+
+  private configureCamera(): void {
+    if (!this.player || !this.cameras?.main) return;
+    const layout = calculateCameraLayout({ ...this.viewport, active: this.requestedActive, zoomOffset: this.zoomOffset });
+    const camera = this.cameras.main;
+    camera.setViewport(0, 0, layout.width, layout.height);
+    camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    camera.setZoom(layout.zoom);
+    if (layout.followsPlayer) {
+      camera.startFollow(this.player.sprite, false, this.reducedMotion ? 1 : 0.12);
+    } else {
+      camera.stopFollow();
+      camera.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    }
   }
 
   private reportPosition(): void {

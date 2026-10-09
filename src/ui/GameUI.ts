@@ -6,6 +6,7 @@ import { createProgress, loadProgress, loadSettings, saveProgress, saveSettings 
 import { icon } from './icons';
 import { applyEnergyPlan, calculateEnergyPlan, DEFAULT_ENERGY_PLAN } from '../systems/energyPlan';
 import { FeedbackAudio } from './FeedbackAudio';
+import { VirtualJoystick } from './VirtualJoystick';
 
 const escape = (value: string): string => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const requiredNames = (): string[] => SCHOOL_CASE.requiredDeviceIds.map((id) => SCHOOL_CASE.equipment.find((device) => device.id === id)!.shortName);
@@ -27,10 +28,12 @@ export class GameUI {
   private previousFocus: HTMLElement | null = null;
   private readonly audio = new FeedbackAudio();
   private draftPlan: EnergyPlan = { ...DEFAULT_ENERGY_PLAN };
+  private joystick?: VirtualJoystick;
 
   constructor(private readonly root: HTMLElement) {
     root.innerHTML = this.shell();
     this.roomParent = root.querySelector<HTMLElement>('#room-canvas')!;
+    root.querySelector('.room-frame')!.append(root.querySelector('.touch-controls')!);
     this.bridge = {
       onReady: () => { this.ready = true; this.updateMenu(); this.applyControllerState(); },
       onNearby: (id) => { this.nearby = id; this.updateNearby(); },
@@ -90,11 +93,11 @@ export class GameUI {
           <div class="sidebar-footer"><button id="report-button" class="button primary full-width" data-action="report" disabled>${icon('folder')} Предварительный отчёт ${icon('arrow')}</button><p id="report-hint" class="report-hint">Сначала соберите ключевые свидетельства</p><button id="plan-button" class="button secondary full-width" data-action="energy-plan" hidden>${icon('bolt')} Лаборатория энергии ${icon('arrow')}</button><div class="save-status" id="save-status">${icon('save')} Автосохранение на этом устройстве</div></div>
         </aside>
         <main class="scene-area">
-          <div class="scene-heading"><div><span class="eyebrow">ЛОКАЦИЯ 01 / ИССЛЕДОВАНИЕ</span><h2>Кабинет информатики <span>2 этаж</span></h2></div><div class="room-status"><i></i> СИМУЛЯЦИЯ АКТИВНА</div></div>
+          <div class="mobile-hud"><button data-action="menu" class="icon-button" aria-label="Главное меню">${icon('back')}</button><div><span>ДЕЛО 001 / ЛОКАЦИЯ</span><strong>Школьная аномалия</strong></div><button data-action="notebook" class="mobile-notebook" aria-label="Блокнот и задания">${icon('folder')} <b id="mobile-evidence-count">0/6</b></button><button data-action="settings" class="icon-button" aria-label="Настройки">${icon('settings')}</button></div><div class="scene-heading"><div><span class="eyebrow">ЛОКАЦИЯ 01 / ИССЛЕДОВАНИЕ</span><h2>Кабинет информатики <span>2 этаж</span></h2></div><div class="room-status"><i></i> СИМУЛЯЦИЯ АКТИВНА</div></div>
           <div class="mission-strip"><span class="mission-avatar">${icon('search')}</span><div><span id="mission-phase">БЮРО / ЗАДАНИЕ</span><p id="mission-message">Найдите причины лишнего расхода энергии.</p></div><button class="icon-button" data-action="briefing" aria-label="Открыть задание">${icon('folder')}</button></div>
-          <div class="room-frame"><div id="room-canvas" role="img" aria-label="Игровой кабинет информатики. Управляйте персонажем WASD или стрелками, E — осмотр." tabindex="0"></div><div class="room-label">${icon('search')} <span>РЕЖИМ ДЕТЕКТИВА</span></div><div class="room-coordinate"><span>N</span><i>↑</i></div><div class="room-scale"><span></span> 1 ИГРОВОЙ МЕТР</div><div class="scan-legend"><i></i> ОБЪЕКТ ДЛЯ ОСМОТРА</div></div>
+          <div class="room-frame"><div class="camera-tools"><button data-action="notebook" aria-label="Блокнот и текущая цель">${icon('folder')}</button><button data-action="zoom-in" aria-label="Приблизить">+</button><button data-action="zoom-out" aria-label="Отдалить">−</button><button data-action="fullscreen" aria-label="Полноэкранный режим">⛶</button></div><div id="room-canvas" role="img" aria-label="Игровой кабинет информатики. Управляйте персонажем WASD или стрелками, E — осмотр." tabindex="0"></div><div class="room-label">${icon('search')} <span>РЕЖИМ ДЕТЕКТИВА</span></div><div class="room-coordinate"><span>N</span><i>↑</i></div><div class="room-scale"><span></span> 1 ИГРОВОЙ МЕТР</div><div class="scan-legend"><i></i> ОБЪЕКТ ДЛЯ ОСМОТРА</div></div>
           <div class="scene-footer"><div id="nearby-hint" class="nearby-hint">${icon('search')} Подойдите к устройству с бирюзовой меткой</div><div class="keyboard-guide"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> движение</span><span><kbd>E</kbd> осмотр</span></div></div>
-          <div class="touch-controls" aria-label="Сенсорное управление"><div class="dpad"><button data-direction="up" class="dpad-up" aria-label="Двигаться вверх">↑</button><button data-direction="left" class="dpad-left" aria-label="Двигаться влево">←</button><span class="dpad-center">${icon('search')}</span><button data-direction="right" class="dpad-right" aria-label="Двигаться вправо">→</button><button data-direction="down" class="dpad-down" aria-label="Двигаться вниз">↓</button></div><button id="touch-interact" class="touch-interact" data-action="interact" disabled>${icon('search')}<span>Осмотреть</span></button></div>
+          <div class="touch-controls" aria-label="Сенсорное управление"><div id="virtual-joystick" class="virtual-joystick" aria-label="Виртуальный джойстик: двигайте палец в нужном направлении"><span class="joystick-knob">${icon('search')}</span></div><button id="touch-interact" class="touch-interact" data-action="interact" disabled>${icon('search')}<span>Осмотреть</span></button></div>
           <p class="scenario-note">Вымышленная планировка и учебные ситуации. Показатели демонстрационные, а не измерения в школе.</p>
         </main>
       </div>
@@ -138,6 +141,10 @@ export class GameUI {
       case 'energy-plan': if (this.progress?.reportSolved) this.showEnergyPlan(); break;
       case 'apply-plan': this.commitEnergyPlan(); break;
       case 'reset-plan': this.draftPlan = { computerHours: 10, lightingHours: 8 }; this.showEnergyPlan(false); break;
+      case 'notebook': this.showNotebook(); break;
+      case 'zoom-in': this.controller?.changeZoom(.15); break;
+      case 'zoom-out': this.controller?.changeZoom(-.15); break;
+      case 'fullscreen': void this.toggleFullscreen(); break;
       case 'select-link': this.root.querySelector<HTMLInputElement>('#share-link')?.select(); break;
     }
   }
@@ -150,7 +157,8 @@ export class GameUI {
     }
     if (input.dataset.setting) {
       const key = input.dataset.setting as keyof Settings;
-      this.settings[key] = input.checked;
+      if (key === 'joystickSensitivity') this.settings.joystickSensitivity = Math.min(1.5, Math.max(.5, input.valueAsNumber || 1));
+      else this.settings[key] = input.checked;
       const saved = saveSettings(this.settings);
       this.applySettings();
       if (key === 'soundEnabled' && input.checked) this.audio.play('clue');
@@ -189,18 +197,14 @@ export class GameUI {
   }
 
   private bindTouchControls(): void {
-    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-direction]')) {
-      const direction = button.dataset.direction as 'up' | 'down' | 'left' | 'right';
-      button.addEventListener('pointerdown', (event) => {
-        event.preventDefault(); button.setPointerCapture(event.pointerId);
-        button.classList.add('pressed'); this.controller?.setTouchDirection(direction, true);
-      });
-      const release = () => { button.classList.remove('pressed'); this.controller?.setTouchDirection(direction, false); };
-      button.addEventListener('pointerup', release);
-      button.addEventListener('pointercancel', release);
-      button.addEventListener('lostpointercapture', release);
-      button.addEventListener('contextmenu', (event) => event.preventDefault());
-    }
+    this.joystick = new VirtualJoystick(this.root.querySelector<HTMLElement>('#virtual-joystick')!, (vector) => this.controller?.setTouchVector(vector), this.settings.joystickSensitivity);
+    this.root.querySelector<HTMLButtonElement>('#touch-interact')!.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch' || !this.playing || this.modalOpen || (event.currentTarget as HTMLButtonElement).disabled) return;
+      // A second finger does not generate the same synthetic click as the
+      // primary touch. Interact directly so movement + inspection works.
+      event.preventDefault();
+      this.controller?.interact();
+    });
   }
 
   private applyControllerState(): void {
@@ -212,7 +216,11 @@ export class GameUI {
     this.syncActive();
   }
 
-  private syncActive(): void { this.controller?.setActive(this.playing && !this.modalOpen && !document.hidden); }
+  private syncActive(): void {
+    const active = this.playing && !this.modalOpen && !document.hidden;
+    if (!active) this.joystick?.reset();
+    this.controller?.setActive(active);
+  }
 
   private startNew(): void {
     this.progress = createProgress();
@@ -255,6 +263,7 @@ export class GameUI {
     this.root.classList.toggle('hide-hints', !this.settings.showHints);
     this.controller?.setReducedMotion(this.settings.reducedMotion);
     this.audio.setEnabled(this.settings.soundEnabled);
+    this.joystick?.setSensitivity(this.settings.joystickSensitivity);
   }
 
   private updateSaveStatus(): void {
@@ -274,6 +283,7 @@ export class GameUI {
     const eligible = this.progress ? canSubmitReport(this.progress) : false;
     const solved = this.progress?.reportSolved ?? false;
     this.root.querySelector('#evidence-count')!.textContent = `${inspected.length} / ${SCHOOL_CASE.equipment.length}`;
+    this.root.querySelector('#mobile-evidence-count')!.textContent = `${inspected.length}/${SCHOOL_CASE.equipment.length}`;
     this.root.querySelector<HTMLElement>('#evidence-progress')!.style.width = `${inspected.length / SCHOOL_CASE.equipment.length * 100}%`;
     this.root.querySelector('#step-inspect')!.classList.toggle('complete', eligible);
     this.root.querySelector('#step-report')!.classList.toggle('complete', solved);
@@ -380,8 +390,21 @@ export class GameUI {
     this.showModal('Архив расследований', `<button class="case-card" data-action="case-play"><span class="case-card-icon">${icon('monitor')}</span><span><small>ДЕЛО 001 · ДОСТУПНО</small><strong>Школьная аномалия</strong><span>Кабинет информатики · 6 объектов</span></span>${icon('arrow')}</button><div class="future-note">${icon('lock')}<div><strong>Новые дела — в будущих версиях</strong><p>В этом прототипе доступна одна комната. Другие локации пока не разработаны.</p></div></div><p class="demo-footnote">Первая локация вдохновлена СШ №225 города Минска. Интерьер, планировка и энергетические ситуации вымышлены.</p>`, 'ВЫБОР ДЕЛА');
   }
 
+  private showNotebook(): void {
+    const inspected = this.progress?.inspectedIds ?? [];
+    this.showModal('Блокнот детектива', `<p>${escape(this.root.querySelector('#mission-message')!.textContent ?? '')}</p><div class="notebook-grid">${SCHOOL_CASE.equipment.map((device) => `<button class="evidence-item ${inspected.includes(device.id) ? 'found' : ''}" data-action="evidence" data-id="${device.id}" ${inspected.includes(device.id) ? '' : 'disabled'}><span class="evidence-icon">${icon(device.category)}</span><span>${escape(device.shortName)}<small>${inspected.includes(device.id) ? 'Открыть записанное наблюдение' : 'Ещё не исследовано'}</small></span>${icon(inspected.includes(device.id) ? 'check' : 'lock')}</button>`).join('')}</div><div class="modal-actions">${this.progress && canSubmitReport(this.progress) ? `<button class="button primary" data-action="report">${this.progress.reportSolved ? 'Открыть отчёт' : 'Проверить гипотезу'} ${icon('arrow')}</button>` : '<button class="button primary" data-action="close">Продолжить поиск</button>'}${this.progress?.reportSolved ? '<button class="button secondary" data-action="energy-plan">Лаборатория энергии</button>' : ''}</div>`, 'УЛИКИ И ТЕКУЩАЯ ЦЕЛЬ');
+  }
+
+  private async toggleFullscreen(): Promise<void> {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+      else this.toast('Браузер не поддерживает полноэкранный режим. Для запуска без панели браузера установите игру на главный экран.');
+    } catch { this.toast('Браузер не разрешил полноэкранный режим. Можно играть в текущем окне или установить игру.'); }
+  }
+
   private showBriefing(): void {
-    this.showModal('Школьная аномалия', `<div class="dispatch-card"><div class="dispatch-avatar">${icon('leaf')}</div><div><span>СООБЩЕНИЕ ИЗ БЮРО</span><strong>Детектив, энергия оставляет следы.</strong></div></div><p class="briefing-story">В учебной модели кабинет уже опустел, а часть техники продолжает расходовать энергию. У каждого прибора своя история: один нужен для связи, другой — для уроков, третий слишком долго ждёт следующего занятия.</p><div class="briefing-goals"><div><b>01</b><strong>Соберите улики</strong><small>Подойдите к компьютерам, проектору и сетевому узлу. Осмотрите их и запишите наблюдения.</small></div><div><b>02</b><strong>Найдите причину</strong><small>Сравните мощность, количество устройств и время работы. Проверьте гипотезу в отчёте.</small></div><div><b>03</b><strong>Проверьте решение</strong><small>Настройте режимы в лаборатории энергии и узнайте расчётную экономию.</small></div></div><p class="demo-footnote">${icon('info')} Вдохновлено СШ №225 Минска. Планировка, характеристики и события вымышлены. Модель не управляет настоящим школьным оборудованием.</p><div class="briefing-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> или стрелки</span><span><kbd>E</kbd> осмотреть</span><small>На телефоне — крестовина и кнопка осмотра.</small></div><div class="modal-actions"><button class="button primary" data-action="close">${this.playing ? 'К расследованию' : 'Понятно'} ${icon('arrow')}</button></div>`, 'ДЕЛО №001 / ВАШЕ ЗАДАНИЕ', 'wide-modal');
+    this.showModal('Школьная аномалия', `<div class="dispatch-card"><div class="dispatch-avatar">${icon('leaf')}</div><div><span>СООБЩЕНИЕ ИЗ БЮРО</span><strong>Детектив, энергия оставляет следы.</strong></div></div><p class="briefing-story">В учебной модели кабинет уже опустел, а часть техники продолжает расходовать энергию. У каждого прибора своя история: один нужен для связи, другой — для уроков, третий слишком долго ждёт следующего занятия.</p><div class="briefing-goals"><div><b>01</b><strong>Соберите улики</strong><small>Подойдите к компьютерам, проектору и сетевому узлу. Осмотрите их и запишите наблюдения.</small></div><div><b>02</b><strong>Найдите причину</strong><small>Сравните мощность, количество устройств и время работы. Проверьте гипотезу в отчёте.</small></div><div><b>03</b><strong>Проверьте решение</strong><small>Настройте режимы в лаборатории энергии и узнайте расчётную экономию.</small></div></div><p class="demo-footnote">${icon('info')} Вдохновлено СШ №225 Минска. Планировка, характеристики и события вымышлены. Модель не управляет настоящим школьным оборудованием.</p><div class="briefing-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> или стрелки</span><span><kbd>E</kbd> осмотреть</span><small>На телефоне — джойстик и крупная кнопка осмотра. Доступны диагональное движение и масштаб +/−.</small></div><div class="modal-actions"><button class="button primary" data-action="close">${this.playing ? 'К расследованию' : 'Понятно'} ${icon('arrow')}</button></div>`, 'ДЕЛО №001 / ВАШЕ ЗАДАНИЕ', 'wide-modal');
   }
 
   private showEnergyPlan(loadSaved = true): void {
@@ -424,11 +447,11 @@ export class GameUI {
   }
 
   private showSettings(): void {
-    this.showModal('Настройки', `<label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Звуки расследования</strong><small>Тихие сигналы новых улик, гипотез и результатов</small></span><input type="checkbox" data-setting="soundEnabled" ${this.settings.soundEnabled ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук включается вами и создаётся локально. Переназначение клавиш пока не реализовано. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
+    this.showModal('Настройки', `<label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Звуки расследования</strong><small>Тихие сигналы новых улик, гипотез и результатов</small></span><input type="checkbox" data-setting="soundEnabled" ${this.settings.soundEnabled ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="sensitivity-setting">Чувствительность джойстика<input type="range" min="0.5" max="1.5" step="0.1" value="${this.settings.joystickSensitivity}" data-setting="joystickSensitivity" /><small>Слева — точное медленное движение, справа — быстрый отклик.</small></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук включается вами и создаётся локально. Переназначение клавиш пока не реализовано. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
   }
 
   private showHelp(): void {
-    this.showModal('Как вести расследование', `<div class="help-steps"><p><span>01</span><strong>Перемещайтесь по кабинету</strong><small>WASD или стрелки. На сенсорном экране используйте крестовину.</small></p><p><span>02</span><strong>Изучайте устройства</strong><small>Подойдите к бирюзовой метке и нажмите E, саму метку или кнопку «Осмотреть». Стены и мебель ограничивают движение.</small></p><p><span>03</span><strong>Сравнивайте свидетельства</strong><small>Осмотрите: ${requiredNames().join(', ')}. Нажмите «Записать улику» в панели прибора. Повторно открыть данные можно в блокноте.</small></p><p><span>04</span><strong>Проверьте гипотезу в отчёте</strong><small>Энергия = мощность × время ÷ 1000. Учтите длительность работы и безопасность изменения режима.</small></p><p><span>05</span><strong>Проверьте безопасный план</strong><small>После верного отчёта откройте лабораторию энергии, сравните режимы ползунками и проверьте результат в комнате.</small></p></div><p class="demo-footnote">Esc закрывает панель, повторный Esc возвращает в меню. Прогресс сохраняется автоматически. ${formatEnergy(getMonthlyBaseline())} кВт·ч — суммарный пример для всех объектов за ${SCHOOL_CASE.workingDays} учебных дней, не школьные измерения.</p><div class="modal-actions"><button class="button primary" data-action="close">Всё понятно ${icon('check')}</button></div>`, 'РУКОВОДСТВО ДЕТЕКТИВА');
+    this.showModal('Как вести расследование', `<div class="help-steps"><p><span>01</span><strong>Перемещайтесь по кабинету</strong><small>WASD или стрелки. На сенсорном экране используйте джойстик слева внизу. Камера следует за персонажем; кнопки +/− меняют масштаб.</small></p><p><span>02</span><strong>Изучайте устройства</strong><small>Подойдите к бирюзовой метке и нажмите E, саму метку или кнопку «Осмотреть». Стены и мебель ограничивают движение.</small></p><p><span>03</span><strong>Сравнивайте свидетельства</strong><small>Осмотрите: ${requiredNames().join(', ')}. Нажмите «Записать улику» в панели прибора. Повторно открыть данные можно в блокноте.</small></p><p><span>04</span><strong>Проверьте гипотезу в отчёте</strong><small>Энергия = мощность × время ÷ 1000. Учтите длительность работы и безопасность изменения режима.</small></p><p><span>05</span><strong>Проверьте безопасный план</strong><small>После верного отчёта откройте лабораторию энергии, сравните режимы ползунками и проверьте результат в комнате.</small></p></div><p class="demo-footnote">Esc закрывает панель, повторный Esc возвращает в меню. Прогресс сохраняется автоматически. ${formatEnergy(getMonthlyBaseline())} кВт·ч — суммарный пример для всех объектов за ${SCHOOL_CASE.workingDays} учебных дней, не школьные измерения.</p><div class="modal-actions"><button class="button primary" data-action="close">Всё понятно ${icon('check')}</button></div>`, 'РУКОВОДСТВО ДЕТЕКТИВА');
   }
 
   private showModal(title: string, body: string, eyebrow: string, className = ''): void {

@@ -135,21 +135,21 @@ describe('local progress persistence', () => {
     assert.equal(saveProgress(createProgress()), false);
     assert.equal(clearProgress(), false);
     assert.equal(loadProgress(), null);
-    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true }), false);
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
+    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true, joystickSensitivity: 1 }), false);
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false, joystickSensitivity: 1 });
   });
 
   it('validates settings and defaults missing or corrupt fields', () => {
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
-    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true }), true);
-    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: true });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false, joystickSensitivity: 1 });
+    assert.equal(saveSettings({ reducedMotion: true, showHints: false, soundEnabled: true, joystickSensitivity: 1 }), true);
+    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: true, joystickSensitivity: 1 });
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ reducedMotion: true, showHints: false }));
-    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: true, showHints: false, soundEnabled: false, joystickSensitivity: 1 });
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ reducedMotion: 'yes', showHints: false }));
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: false, soundEnabled: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: false, soundEnabled: false, joystickSensitivity: 1 });
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ soundEnabled: 'yes' }));
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false, joystickSensitivity: 1 });
     storage.setItem(SETTINGS_STORAGE_KEY, 'broken-json');
-    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false });
+    assert.deepEqual(loadSettings(), { reducedMotion: false, showHints: true, soundEnabled: false, joystickSensitivity: 1 });
   });
 });

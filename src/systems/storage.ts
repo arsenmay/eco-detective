@@ -5,7 +5,7 @@ import { validateEnergyPlan } from './energyPlan';
 export const PROGRESS_STORAGE_KEY = 'eco-detective:progress:v1';
 export const SETTINGS_STORAGE_KEY = 'eco-detective:settings:v1';
 
-const defaultSettings: Settings = { reducedMotion: false, showHints: true, soundEnabled: false };
+const defaultSettings: Settings = { reducedMotion: false, showHints: true, soundEnabled: false, joystickSensitivity: 1 };
 const equipmentIds = new Set(SCHOOL_CASE.equipment.map((device) => device.id));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,6 +111,8 @@ export function loadSettings(): Settings {
       reducedMotion: typeof data.reducedMotion === 'boolean' ? data.reducedMotion : defaultSettings.reducedMotion,
       showHints: typeof data.showHints === 'boolean' ? data.showHints : defaultSettings.showHints,
       soundEnabled: typeof data.soundEnabled === 'boolean' ? data.soundEnabled : defaultSettings.soundEnabled,
+      joystickSensitivity: typeof data.joystickSensitivity === 'number' && Number.isFinite(data.joystickSensitivity)
+        ? Math.min(1.5, Math.max(0.5, data.joystickSensitivity)) : defaultSettings.joystickSensitivity,
     };
   } catch {
     return { ...defaultSettings };
@@ -119,12 +121,14 @@ export function loadSettings(): Settings {
 
 export function saveSettings(settings: Settings): boolean {
   if (typeof settings.reducedMotion !== 'boolean' || typeof settings.showHints !== 'boolean'
-    || typeof settings.soundEnabled !== 'boolean') return false;
+    || typeof settings.soundEnabled !== 'boolean' || !Number.isFinite(settings.joystickSensitivity)
+    || settings.joystickSensitivity < 0.5 || settings.joystickSensitivity > 1.5) return false;
   try {
     globalThis.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
       reducedMotion: settings.reducedMotion,
       showHints: settings.showHints,
       soundEnabled: settings.soundEnabled,
+      joystickSensitivity: settings.joystickSensitivity,
     }));
     return true;
   } catch {
