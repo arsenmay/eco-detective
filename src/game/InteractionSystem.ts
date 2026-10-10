@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Equipment, Point } from '../types';
+import { worldToScreen } from '../rendering/projection';
 
 export const INTERACTION_REACH = 99;
 
@@ -24,22 +25,22 @@ export class InteractionSystem {
   constructor(scene: Phaser.Scene, equipment: readonly Equipment[], onClick: (id: string) => void) {
     this.scene = scene;
     this.markers = equipment.map((device, index) => {
-      const { x, y } = device.position;
-      const halo = scene.add.circle(x, y, 35, 0x49ead3, 0.09).setDepth(39);
+      const { x, y } = worldToScreen(device.position, 54);
+      const halo = scene.add.circle(x, y, 29, 0x49ead3, 0.09).setDepth(100039);
       const ring = scene.add.circle(x, y, 19, 0x10273b, 0.94)
-        .setStrokeStyle(1, 0x54d7c5, 0.78).setDepth(40);
+        .setStrokeStyle(1, 0x54d7c5, 0.78).setDepth(100040);
       ring.setInteractive(new Phaser.Geom.Circle(19, 19, 25), Phaser.Geom.Circle.Contains);
       ring.on('pointerdown', () => onClick(device.id));
       const number = scene.add.text(x, y, String(index + 1).padStart(2, '0'), {
         fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
         fontSize: '13px', color: '#bcf9ec', fontStyle: 'bold',
-      }).setOrigin(0.5).setDepth(41);
+      }).setOrigin(0.5).setDepth(100041);
       const caption = scene.add.text(x, y + 30, device.shortName, {
         fontFamily: 'Manrope, Arial, sans-serif', fontSize: '12px', color: '#b0c4d4',
         backgroundColor: '#101f30', padding: { x: 8, y: 4 },
-      }).setOrigin(0.5, 0).setDepth(42);
+      }).setOrigin(0.5, 0).setDepth(100042);
       const activeDot = scene.add.circle(x + 15, y - 14, 4, 0x9bffe8, 1)
-        .setStrokeStyle(2, 0x0b2332).setDepth(43).setVisible(false);
+        .setStrokeStyle(2, 0x0b2332).setDepth(100043).setVisible(false);
       return { device, halo, ring, number, caption, activeDot };
     });
   }
@@ -88,8 +89,9 @@ export class InteractionSystem {
   showInspectionFeedback(id: string): void {
     const marker = this.markers.find(({ device }) => device.id === id);
     if (!marker || this.reducedMotion) return;
-    const pulse = this.scene.add.circle(marker.device.position.x, marker.device.position.y, 20)
-      .setStrokeStyle(2, 0x83ffd1, 0.85).setDepth(44);
+    const projected = worldToScreen(marker.device.position, 54);
+    const pulse = this.scene.add.circle(projected.x, projected.y, 20)
+      .setStrokeStyle(2, 0x83ffd1, 0.85).setDepth(100044);
     this.feedback.add(pulse);
     this.scene.tweens.add({
       targets: pulse, scale: 2.8, alpha: 0, duration: 1000, ease: 'Cubic.Out',
@@ -116,6 +118,7 @@ export class InteractionSystem {
       marker.number.setColor(inspected ? '#82f1b2' : '#c1fff0');
       marker.caption.setColor(nearby ? '#effffb' : inspected ? '#9cd6b4' : '#b0c4d4');
       marker.caption.setText(nearby ? `${marker.device.shortName} · ОСМОТР` : marker.device.shortName);
+      marker.caption.setVisible(nearby);
       marker.activeDot.setVisible(nearby);
       marker.halo.setFillStyle(color, nearby ? 0.12 : 0.08);
     });

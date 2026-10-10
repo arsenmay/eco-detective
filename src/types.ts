@@ -69,6 +69,8 @@ export type RoomController = {
   setCampaignPlan: (plan: import('./campaign/types').CampaignPlan | null) => void;
   interact: () => void;
   setReducedMotion: (reduced: boolean) => void;
+  setGraphicsQuality: (quality: 'auto' | 'low' | 'medium' | 'high') => void;
+  setVirtualTime: (hour: number) => void;
   setEnergyPlan: (plan: EnergyPlan | null) => void;
   getPlayerPosition: () => Point;
 };

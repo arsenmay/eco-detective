@@ -1,66 +1,39 @@
 import Phaser from 'phaser';
 import type { Point } from '../types';
 import { capMovementVector } from './cameraLayout';
+import { createDetectiveArtwork, type DetectiveArtwork } from '../rendering/DetectiveArtwork';
+import { facingFromScreenVector, getDetectivePose, type DetectiveFacing, type DetectiveState } from '../rendering/detectivePose';
+import { getDepth, worldDirectionToScreen, worldToScreen } from '../rendering/projection';
+
+export type { DetectiveState } from '../rendering/detectivePose';
 
 export const PLAYER_SPEED = 184;
 
-/** A small top-down investigator; all artwork is generated locally. */
+/** Logical Arcade physics and an independent upright, projected detective. */
 export class Player {
   readonly sprite: Phaser.Physics.Arcade.Image;
-  private readonly halo: Phaser.GameObjects.Arc;
-  private readonly shadow: Phaser.GameObjects.Ellipse;
+  readonly visual: Phaser.GameObjects.Container;
+  private readonly artwork: DetectiveArtwork;
   private moving = false;
+  private facing: DetectiveFacing = 'front';
+  private requestedState: DetectiveState | null = null;
+  private stateEndsAt = Infinity;
 
-  constructor(scene: Phaser.Scene, position: Point) {
-    if (!scene.textures.exists('investigator')) {
-      const art = scene.make.graphics({ x: 0, y: 0 });
-      art.fillStyle(0x0b1724);
-      art.fillRoundedRect(18, 34, 10, 17, 4);
-      art.fillRoundedRect(32, 34, 10, 17, 4);
-      art.fillStyle(0x101f30);
-      art.fillRoundedRect(17, 43, 12, 10, 3);
-      art.fillRoundedRect(31, 43, 12, 10, 3);
-      art.fillStyle(0x247d94);
-      art.fillRoundedRect(13, 25, 34, 17, 7);
-      art.fillStyle(0x47c6ca);
-      art.fillRoundedRect(20, 24, 20, 21, 6);
-      art.fillStyle(0x276e86);
-      art.fillRoundedRect(25, 28, 10, 17, 3);
-      art.lineStyle(1, 0x175268, 0.9);
-      art.lineBetween(30, 28, 30, 44);
-      art.fillStyle(0xe9d69a);
-      art.fillRoundedRect(22, 31, 5, 6, 1);
-      art.fillStyle(0x162c3d);
-      art.fillRoundedRect(39, 35, 11, 13, 2);
-      art.fillStyle(0x82e9d5);
-      art.fillRoundedRect(41, 37, 7, 8, 1);
-      art.fillStyle(0x92e5da);
-      art.fillRoundedRect(14, 27, 5, 10, 2);
-      art.fillRoundedRect(41, 27, 5, 10, 2);
-      art.fillStyle(0xf0c29e);
-      art.fillCircle(30, 20, 10);
-      art.fillStyle(0x243149);
-      art.fillCircle(30, 17, 11);
-      art.fillStyle(0x324966);
-      art.fillEllipse(29, 13, 16, 10);
-      art.fillStyle(0x81fff0);
-      art.fillRoundedRect(18, 15, 4, 10, 2);
-      art.fillRoundedRect(38, 15, 4, 10, 2);
-      art.lineStyle(2, 0xadfff1, 0.6);
-      art.lineBetween(22, 28, 22, 37);
-      art.generateTexture('investigator', 60, 60);
-      art.destroy();
+  constructor(private readonly scene: Phaser.Scene, position: Point) {
+    // Keeping this 60 px frame, circle and origin preserves every logical
+    // collision and saved coordinate from previous versions of the game.
+    const bodyTexture = 'eco-detective-logical-body';
+    if (!scene.textures.exists(bodyTexture)) {
+      scene.textures.createCanvas(bodyTexture, 60, 60)?.refresh();
     }
-
-    this.shadow = scene.add.ellipse(position.x, position.y + 8, 36, 20, 0x030a14, 0.5).setDepth(24);
-    this.halo = scene.add.circle(position.x, position.y, 26, 0x3ce5d0, 0.075)
-      .setStrokeStyle(1, 0x58f0de, 0.28).setDepth(25);
-    this.sprite = scene.physics.add.image(position.x, position.y, 'investigator').setDepth(55);
+    this.sprite = scene.physics.add.image(position.x, position.y, bodyTexture).setVisible(false);
     this.sprite.setCircle(12, 18, 18);
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setMaxVelocity(PLAYER_SPEED);
     this.sprite.setDamping(false);
-    this.sprite.setRotation(Math.PI);
+    this.artwork = createDetectiveArtwork(scene);
+    this.visual = this.artwork.visual;
+    this.animate(scene.time.now, false);
   }
 
   move(horizontal: number, vertical: number): boolean {
@@ -74,7 +47,8 @@ export class Player {
     const vx = vector.x * PLAYER_SPEED;
     const vy = vector.y * PLAYER_SPEED;
     this.sprite.setVelocity(vx, vy);
-    this.sprite.setRotation(Math.atan2(vy, vx) + Math.PI / 2);
+    const direction = worldDirectionToScreen(vector);
+    this.facing = facingFromScreenVector(direction.x, direction.y, this.facing);
     return true;
   }
 
@@ -84,11 +58,34 @@ export class Player {
   }
 
   animate(time: number, reducedMotion: boolean): void {
-    this.halo.setPosition(this.sprite.x, this.sprite.y);
-    this.shadow.setPosition(this.sprite.x, this.sprite.y + 8);
-    this.halo.setAlpha(reducedMotion ? 1 : 0.8 + Math.sin(time / 500) * 0.2);
-    const bob = !reducedMotion && this.moving ? 1 + Math.sin(time / 70) * 0.018 : 1;
-    this.sprite.setScale(bob);
+    if (this.requestedState && time >= this.stateEndsAt) this.requestedState = null;
+    const position = this.position();
+    const screen = worldToScreen(position);
+    this.visual.setPosition(screen.x, screen.y).setDepth(getDepth(position, 5));
+    this.artwork.update(this.facing, getDetectivePose(time, this.moving, reducedMotion, this.state), time, reducedMotion);
+  }
+
+  get state(): DetectiveState {
+    return this.requestedState ?? (this.moving ? 'walk' : 'idle');
+  }
+
+  /** One-shot poses expire automatically; scan is retained until idle is set. */
+  setState(state: DetectiveState, durationMs?: number): void {
+    if (state === 'idle' || state === 'walk') {
+      this.requestedState = null;
+      this.stateEndsAt = Infinity;
+      return;
+    }
+    const defaultDuration = state === 'interact' ? 550 : state === 'inspect' ? 950 : state === 'success' ? 1400 : Infinity;
+    const duration = durationMs !== undefined && Number.isFinite(durationMs) ? Math.max(0, durationMs) : defaultDuration;
+    this.requestedState = state;
+    this.stateEndsAt = this.scene.time.now + duration;
+  }
+
+  /** Useful for looking at a device while retaining logical interaction range. */
+  faceTowards(target: Point): void {
+    const direction = worldDirectionToScreen({ x: target.x - this.sprite.x, y: target.y - this.sprite.y });
+    this.facing = facingFromScreenVector(direction.x, direction.y, this.facing);
   }
 
   position(): Point {
@@ -99,7 +96,6 @@ export class Player {
     this.stop();
     this.sprite.setPosition(position.x, position.y);
     this.sprite.body?.reset(position.x, position.y);
-    this.halo.setPosition(position.x, position.y);
-    this.shadow.setPosition(position.x, position.y + 8);
+    this.animate(this.scene.time.now, false);
   }
 }

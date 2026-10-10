@@ -4,10 +4,12 @@ import type { CampaignCase, CampaignPlan } from '../campaign/types';
 import { CAMPAIGN_CASES } from '../data/campaign';
 import { InteractionSystem } from './InteractionSystem';
 import { Player } from './Player';
-import { calculateCameraLayout, capMovementVector } from './cameraLayout';
-import { applyCampaignVisualPlan, drawCampaignRoom, type CampaignArtwork } from './levelArtwork';
+import { capMovementVector } from './cameraLayout';
+import { calculateIsoCameraLayout } from '../rendering/isoCamera';
+import { screenDirectionToWorld } from '../rendering/projection';
+import { renderRoom, type RoomRenderer } from '../rendering/RoomRenderer';
 import { safePlayerPositionForLevel } from './roomGeometry';
-import { applyRoomEnergyPlan, WORLD_HEIGHT, WORLD_WIDTH } from './roomArtwork';
+import { WORLD_HEIGHT, WORLD_WIDTH } from './roomArtwork';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -19,7 +21,9 @@ export class RoomScene extends Phaser.Scene {
   private player?: Player;
   private interactions?: InteractionSystem;
   private keys?: Record<string, Phaser.Input.Keyboard.Key>;
-  private artwork?: CampaignArtwork;
+  private artwork?: RoomRenderer;
+  private graphicsQuality: 'auto' | 'low' | 'medium' | 'high' = 'auto';
+  private virtualHour = 12;
   private thermalView = false;
   private restartPending = false;
   private energyPlan: EnergyPlan | null = null;
@@ -53,7 +57,7 @@ export class RoomScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#070f1c');
     const { bounds } = this.level.room;
     this.physics.world.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.artwork = drawCampaignRoom(this, this.level);
+    this.artwork = renderRoom(this, this.level);
     this.applyVisualPlan();
     this.applyThermalVisibility();
     this.pendingPosition = safePlayerPositionForLevel(this.pendingPosition, this.level);
@@ -96,23 +100,20 @@ export class RoomScene extends Phaser.Scene {
       const keyboardVertical = Number(this.keyDown('S') || this.keyDown('DOWN') || this.touch.down)
         - Number(this.keyDown('W') || this.keyDown('UP') || this.touch.up);
       const hasDigitalInput = keyboardHorizontal !== 0 || keyboardVertical !== 0;
-      moving = this.player.move(
+      const screenVector = capMovementVector(
         hasDigitalInput ? keyboardHorizontal : this.touchVector.x,
         hasDigitalInput ? keyboardVertical : this.touchVector.y,
       );
+      const worldVector = screenDirectionToWorld(screenVector);
+      moving = this.player.move(worldVector.x, worldVector.y);
       this.updateNearby();
     } else {
       this.player.stop();
     }
     this.player.animate(time, this.reducedMotion);
     this.interactions.animate(time, this.reducedMotion || !this.isActive());
-    if (this.artwork) {
-      const labLightingHours = this.campaignPlan?.kind === 'timeline' ? this.campaignPlan.lightingHours : this.energyPlan?.lightingHours;
-      const lightLevel = this.level.theme === 'lab' && labLightingHours !== undefined ? 0.48 + labLightingHours / 8 * 0.52 : 1;
-      this.artwork.lighting.setAlpha(lightLevel * (this.reducedMotion || !this.isActive() ? 1 : 0.97 + Math.sin(time / 1500) * 0.03));
-      this.artwork.scanningLine.setVisible(!this.reducedMotion && this.isActive());
-      this.artwork.scanningLine.setY(this.level.room.bounds.y + (time % 12000) / 12000 * this.level.room.bounds.height);
-    }
+    const quality = this.graphicsQuality === 'auto' ? (this.viewport.mobile ? 'medium' : 'high') : this.graphicsQuality;
+    this.artwork?.update(time, this.isActive(), this.reducedMotion, quality);
 
     if ((moving && time - this.lastPositionTime >= 650) || (this.wasMoving && !moving)) {
       this.reportPosition();
@@ -209,9 +210,9 @@ export class RoomScene extends Phaser.Scene {
 
   changeZoom(delta: number): void {
     if (!Number.isFinite(delta)) return;
-    const layout = calculateCameraLayout({ ...this.viewport, zoomOffset: this.zoomOffset });
+    const layout = calculateIsoCameraLayout({ ...this.viewport, zoomOffset: this.zoomOffset });
     const zoom = Math.max(layout.minZoom, Math.min(layout.maxZoom, layout.zoom + delta));
-    this.zoomOffset = zoom - (this.viewport.mobile ? 1 : layout.fitZoom);
+    this.zoomOffset = zoom - layout.baseZoom;
     this.configureCamera();
   }
 
@@ -219,6 +220,16 @@ export class RoomScene extends Phaser.Scene {
     this.reducedMotion = reduced;
     this.interactions?.setReducedMotion(reduced);
     this.cameras?.main?.setLerp(reduced ? 1 : 0.12);
+  }
+
+  setGraphicsQuality(quality: 'auto' | 'low' | 'medium' | 'high'): void {
+    this.graphicsQuality = quality;
+  }
+
+  setVirtualTime(hour: number): void {
+    if (!Number.isFinite(hour)) return;
+    this.virtualHour = ((hour % 24) + 24) % 24;
+    this.artwork?.setTime(this.virtualHour);
   }
 
   setEnergyPlan(plan: EnergyPlan | null): void {
@@ -240,6 +251,9 @@ export class RoomScene extends Phaser.Scene {
   private tryInteract(id: string): void {
     if (!this.isActive() || !this.player || !this.interactions?.inRange(id, this.player.position())) return;
     this.clearControls();
+    const device = this.equipment.find((entry) => entry.id === id);
+    if (device) this.player.faceTowards(device.position);
+    this.player.setState('scan', 1400);
     this.bridge.onInteract(id);
   }
 
@@ -278,16 +292,17 @@ export class RoomScene extends Phaser.Scene {
 
   private configureCamera(): void {
     if (!this.player || !this.cameras?.main) return;
-    const layout = calculateCameraLayout({ ...this.viewport, active: this.requestedActive, zoomOffset: this.zoomOffset });
+    const layout = calculateIsoCameraLayout({ ...this.viewport, active: this.requestedActive, zoomOffset: this.zoomOffset });
     const camera = this.cameras.main;
     camera.setViewport(0, 0, layout.width, layout.height);
-    camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    camera.setBounds(layout.bounds.x, layout.bounds.y, layout.bounds.width, layout.bounds.height);
     camera.setZoom(layout.zoom);
     if (layout.followsPlayer) {
-      camera.startFollow(this.player.sprite, false, this.reducedMotion ? 1 : 0.12);
+      camera.startFollow(this.player.visual, false, this.reducedMotion ? 1 : 0.12);
+      camera.setFollowOffset(0, 35);
     } else {
       camera.stopFollow();
-      camera.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+      camera.centerOn(layout.bounds.x + layout.bounds.width / 2, layout.bounds.y + layout.bounds.height / 2);
     }
   }
 
@@ -324,6 +339,7 @@ export class RoomScene extends Phaser.Scene {
     this.keys?.E.off(Phaser.Input.Keyboard.Events.DOWN, this.onInteractKey);
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
+    this.artwork?.destroy();
     this.player = undefined;
     this.interactions = undefined;
     this.artwork = undefined;
@@ -333,12 +349,13 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private applyThermalVisibility(): void {
-    this.artwork?.thermalLayer.setVisible(this.thermalView && (this.level.theme === 'thermal' || this.level.theme === 'school'));
+    this.artwork?.setThermalView(this.thermalView);
   }
 
   private applyVisualPlan(): void {
     if (!this.artwork) return;
-    if (!this.campaignPlan && this.level.theme === 'lab') applyRoomEnergyPlan(this.artwork, this.energyPlan);
-    else applyCampaignVisualPlan(this.artwork, this.level, this.campaignPlan);
+    const plan = this.campaignPlan ?? (this.energyPlan && this.level.theme === 'lab' ? { kind: 'timeline' as const, ...this.energyPlan, daylight: false } : null);
+    this.artwork.setPlan(plan);
+    this.artwork.setTime(this.virtualHour);
   }
 }
