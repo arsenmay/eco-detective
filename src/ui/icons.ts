@@ -18,6 +18,14 @@ const paths: Record<string, string> = {
   time: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2"/>',
   back: '<path d="M20 12H5m6-6-6 6 6 6"/>',
+  fridge: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M6 9h12m-9-4v2m0 5v4"/>',
+  freezer: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 7v10m-4-8 8 6m-8 0 8-6"/>',
+  ventilation: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 10C6 1 2 12 10 12m2 2c6 9 10-2 2-2m0 0c9-6-2-10-2-2m-2 2c-9 6 2 10 2 2"/>',
+  kitchen: '<rect x="4" y="3" width="16" height="18" rx="2"/><rect x="7" y="10" width="10" height="7" rx="1"/><path d="M8 6h.01M12 6h.01M16 6h.01"/>',
+  heating: '<path d="M5 21V9h14v12M8 9V5m4 4V3m4 6V5M8 12v6m4-6v6m4-6v6"/>',
+  window: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18m-4-7-3 3"/>',
+  door: '<path d="M5 22V3l13-2v21M3 22h18m-7-11h.01"/>',
+  document: '<path d="M6 2h8l5 5v15H6Zm8 0v6h5M9 12h7m-7 4h7"/>',
 };
 
 export function icon(name: string, className = ''): string {

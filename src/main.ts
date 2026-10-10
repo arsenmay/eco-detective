@@ -1,12 +1,12 @@
 import './style.css';
-import { SCHOOL_CASE } from './data/schoolCase';
+import { CAMPAIGN_CASES } from './data/campaign';
 import { createRoom } from './game/createRoom';
 import { GameUI } from './ui/GameUI';
 import { setupLauncher } from './pwa';
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const ui = new GameUI(app);
-ui.connect(createRoom(ui.roomParent, SCHOOL_CASE.equipment, ui.bridge));
+ui.connect(createRoom(ui.roomParent, CAMPAIGN_CASES[0].equipment, ui.bridge));
 setupLauncher(app, {
   installGuide: () => ui.showInstallationGuide(),
   shareGuide: (url) => ui.showSharingGuide(url),

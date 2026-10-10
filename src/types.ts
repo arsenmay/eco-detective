@@ -10,7 +10,7 @@ export type Equipment = {
   id: string;
   name: string;
   shortName: string;
-  category: 'computer' | 'monitor' | 'projector' | 'lighting' | 'network';
+  category: 'computer' | 'monitor' | 'projector' | 'lighting' | 'network' | 'fridge' | 'freezer' | 'ventilation' | 'kitchen' | 'heating' | 'window' | 'door' | 'document';
   position: Point;
   mode: EnergyMode;
   quantity: number;
@@ -64,6 +64,9 @@ export type RoomController = {
   setTouchDirection: (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => void;
   setTouchVector: (vector: Point) => void;
   changeZoom: (delta: number) => void;
+  setLevel: (level: import('./campaign/types').CampaignCase) => void;
+  setThermalView: (enabled: boolean) => void;
+  setCampaignPlan: (plan: import('./campaign/types').CampaignPlan | null) => void;
   interact: () => void;
   setReducedMotion: (reduced: boolean) => void;
   setEnergyPlan: (plan: EnergyPlan | null) => void;

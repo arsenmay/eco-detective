@@ -1,30 +1,38 @@
 import Phaser from 'phaser';
 import type { EnergyPlan, Equipment, GameBridge, Point } from '../types';
+import type { CampaignCase, CampaignPlan } from '../campaign/types';
+import { CAMPAIGN_CASES } from '../data/campaign';
 import { InteractionSystem } from './InteractionSystem';
 import { Player } from './Player';
 import { calculateCameraLayout, capMovementVector } from './cameraLayout';
-import { applyRoomEnergyPlan, drawRoom, FURNITURE, ROOM_BOUNDS, safePlayerPosition, SPAWN, WORLD_HEIGHT, WORLD_WIDTH, type RoomArtwork } from './roomArtwork';
+import { applyCampaignVisualPlan, drawCampaignRoom, type CampaignArtwork } from './levelArtwork';
+import { safePlayerPositionForLevel } from './roomGeometry';
+import { applyRoomEnergyPlan, WORLD_HEIGHT, WORLD_WIDTH } from './roomArtwork';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 
-/** A single fictional room. UI and persistence stay outside the Phaser scene. */
+/** The current fictional location. UI and persistence stay outside Phaser. */
 export class RoomScene extends Phaser.Scene {
-  private readonly equipment: readonly Equipment[];
+  private equipment: readonly Equipment[];
+  private level: CampaignCase = CAMPAIGN_CASES[0];
   private readonly bridge: GameBridge;
   private player?: Player;
   private interactions?: InteractionSystem;
   private keys?: Record<string, Phaser.Input.Keyboard.Key>;
-  private artwork?: RoomArtwork;
+  private artwork?: CampaignArtwork;
+  private thermalView = false;
+  private restartPending = false;
   private energyPlan: EnergyPlan | null = null;
+  private campaignPlan: CampaignPlan | null = null;
   private requestedActive = false;
   private hasBeenActive = false;
   private readonly pendingFeedback = new Set<string>();
   private browserFocused = true;
   private reducedMotion = false;
   private inspectedIds: readonly string[] = [];
-  private pendingPosition: Point = { ...SPAWN };
+  private pendingPosition: Point = { ...this.level.initialPosition };
   private nearbyId: string | null = null;
-  private lastReportedPosition: Point = { ...SPAWN };
+  private lastReportedPosition: Point = { ...this.level.initialPosition };
   private lastPositionTime = 0;
   private wasMoving = false;
   private touchVector: Point = { x: 0, y: 0 };
@@ -34,21 +42,25 @@ export class RoomScene extends Phaser.Scene {
   private readonly capturedKeys = ['W', 'A', 'S', 'D', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'E'];
 
   constructor(equipment: readonly Equipment[], bridge: GameBridge) {
-    super({ key: 'ComputerLab' });
-    this.equipment = equipment;
+    super({ key: 'InvestigationRoom' });
+    // The legacy constructor remains compatible with the first prototype;
+    // campaign data supplies the current room's complete set of objects.
+    this.equipment = this.level.equipment.length ? this.level.equipment : equipment;
     this.bridge = bridge;
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor('#070f1c');
-    this.physics.world.setBounds(ROOM_BOUNDS.x, ROOM_BOUNDS.y, ROOM_BOUNDS.width, ROOM_BOUNDS.height);
-    this.artwork = drawRoom(this);
-    applyRoomEnergyPlan(this.artwork, this.energyPlan);
-    this.pendingPosition = safePlayerPosition(this.pendingPosition);
+    const { bounds } = this.level.room;
+    this.physics.world.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+    this.artwork = drawCampaignRoom(this, this.level);
+    this.applyVisualPlan();
+    this.applyThermalVisibility();
+    this.pendingPosition = safePlayerPositionForLevel(this.pendingPosition, this.level);
     this.player = new Player(this, this.pendingPosition);
 
     const furniture = this.physics.add.staticGroup();
-    for (const rect of FURNITURE) {
+    for (const rect of this.level.room.furniture) {
       const zone = this.add.zone(rect.x, rect.y, rect.width, rect.height);
       this.physics.add.existing(zone, true);
       furniture.add(zone);
@@ -68,6 +80,8 @@ export class RoomScene extends Phaser.Scene {
     window.addEventListener('focus', this.onWindowFocus);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
+    this.restartPending = false;
+    this.game.canvas?.setAttribute('aria-label', `${this.level.location}. Двигайтесь WASD или стрелками; E — осмотреть ближайший объект.`);
     this.syncInputState();
     this.configureCamera();
     this.bridge.onReady();
@@ -93,10 +107,11 @@ export class RoomScene extends Phaser.Scene {
     this.player.animate(time, this.reducedMotion);
     this.interactions.animate(time, this.reducedMotion || !this.isActive());
     if (this.artwork) {
-      const lightLevel = this.energyPlan ? 0.48 + this.energyPlan.lightingHours / 8 * 0.52 : 1;
+      const labLightingHours = this.campaignPlan?.kind === 'timeline' ? this.campaignPlan.lightingHours : this.energyPlan?.lightingHours;
+      const lightLevel = this.level.theme === 'lab' && labLightingHours !== undefined ? 0.48 + labLightingHours / 8 * 0.52 : 1;
       this.artwork.lighting.setAlpha(lightLevel * (this.reducedMotion || !this.isActive() ? 1 : 0.97 + Math.sin(time / 1500) * 0.03));
       this.artwork.scanningLine.setVisible(!this.reducedMotion && this.isActive());
-      this.artwork.scanningLine.setY(126 + (time % 12000) / 12000 * 548);
+      this.artwork.scanningLine.setY(this.level.room.bounds.y + (time % 12000) / 12000 * this.level.room.bounds.height);
     }
 
     if ((moving && time - this.lastPositionTime >= 650) || (this.wasMoving && !moving)) {
@@ -122,16 +137,48 @@ export class RoomScene extends Phaser.Scene {
   }
 
   setPlayerPosition(position: Point): void {
-    this.pendingPosition = safePlayerPosition(position);
-    this.player?.setPosition(this.pendingPosition);
-    this.clearControls();
+    this.pendingPosition = safePlayerPositionForLevel(position, this.level);
+    if (!this.restartPending) this.player?.setPosition(this.pendingPosition);
+    this.clearControls(!this.restartPending);
     this.reportPosition();
     this.updateNearby();
     this.configureCamera();
   }
 
   getPlayerPosition(): Point {
-    return this.player?.position() ?? { ...this.pendingPosition };
+    return this.restartPending ? { ...this.pendingPosition } : this.player?.position() ?? { ...this.pendingPosition };
+  }
+
+  setLevel(level: CampaignCase): void {
+    if (level.id === this.level.id) return;
+    const needsRestart = Boolean(this.player) && !this.restartPending;
+    this.clearControls(false);
+    this.level = level;
+    this.equipment = level.equipment;
+    this.pendingPosition = safePlayerPositionForLevel(level.initialPosition, level);
+    this.lastReportedPosition = { ...this.pendingPosition };
+    this.inspectedIds = [];
+    this.pendingFeedback.clear();
+    this.hasBeenActive = false;
+    this.nearbyId = null;
+    this.energyPlan = null;
+    this.campaignPlan = null;
+    this.thermalView = false;
+    this.lastPositionTime = 0;
+    this.bridge.onNearby(null);
+    if (needsRestart) {
+      this.restartPending = true;
+      this.scene.restart();
+    }
+  }
+
+  getCurrentCaseId(): string {
+    return this.level.id;
+  }
+
+  setThermalView(enabled: boolean): void {
+    this.thermalView = enabled;
+    this.applyThermalVisibility();
   }
 
   setInspected(ids: readonly string[]): void {
@@ -176,7 +223,12 @@ export class RoomScene extends Phaser.Scene {
 
   setEnergyPlan(plan: EnergyPlan | null): void {
     this.energyPlan = plan ? { ...plan } : null;
-    if (this.artwork) applyRoomEnergyPlan(this.artwork, this.energyPlan);
+    this.applyVisualPlan();
+  }
+
+  setCampaignPlan(plan: CampaignPlan | null): void {
+    this.campaignPlan = plan ? structuredClone(plan) : null;
+    this.applyVisualPlan();
   }
 
   interact(): void {
@@ -196,7 +248,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private isActive(): boolean {
-    return this.requestedActive && this.browserFocused;
+    return this.requestedActive && this.browserFocused && !this.restartPending;
   }
 
   private updateNearby(): void {
@@ -208,12 +260,12 @@ export class RoomScene extends Phaser.Scene {
     this.bridge.onNearby(next);
   }
 
-  private clearControls(): void {
+  private clearControls(report = true): void {
     for (const direction of Object.keys(this.touch) as Direction[]) this.touch[direction] = false;
     this.touchVector = { x: 0, y: 0 };
     this.input?.keyboard?.resetKeys();
     this.player?.stop();
-    this.reportPosition();
+    if (report) this.reportPosition();
     this.wasMoving = false;
   }
 
@@ -240,7 +292,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private reportPosition(): void {
-    if (!this.player) return;
+    if (!this.player || this.restartPending) return;
     const position = this.player.position();
     if (Math.hypot(position.x - this.lastReportedPosition.x, position.y - this.lastReportedPosition.y) < 0.5) return;
     this.lastReportedPosition = position;
@@ -270,5 +322,23 @@ export class RoomScene extends Phaser.Scene {
     window.removeEventListener('focus', this.onWindowFocus);
     this.input?.keyboard?.removeCapture(this.capturedKeys);
     this.keys?.E.off(Phaser.Input.Keyboard.Events.DOWN, this.onInteractKey);
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
+    this.events.off(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
+    this.player = undefined;
+    this.interactions = undefined;
+    this.artwork = undefined;
+    this.keys = undefined;
+    this.wasMoving = false;
+    this.touchVector = { x: 0, y: 0 };
+  }
+
+  private applyThermalVisibility(): void {
+    this.artwork?.thermalLayer.setVisible(this.thermalView && (this.level.theme === 'thermal' || this.level.theme === 'school'));
+  }
+
+  private applyVisualPlan(): void {
+    if (!this.artwork) return;
+    if (!this.campaignPlan && this.level.theme === 'lab') applyRoomEnergyPlan(this.artwork, this.energyPlan);
+    else applyCampaignVisualPlan(this.artwork, this.level, this.campaignPlan);
   }
 }

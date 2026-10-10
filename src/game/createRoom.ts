@@ -5,7 +5,7 @@ import { RoomScene } from './RoomScene';
 export function createRoom(parent: HTMLElement, equipment: readonly Equipment[], bridge: GameBridge): RoomController {
   const scene = new RoomScene(equipment, bridge);
   const mobileQuery = window.matchMedia('(pointer: coarse)');
-  const isMobile = (): boolean => mobileQuery.matches || window.innerWidth <= 860;
+  const isMobile = (): boolean => mobileQuery.matches || window.innerWidth <= 900;
   scene.setViewport(Math.max(1, parent.clientWidth), Math.max(1, parent.clientHeight), isMobile());
   const game = new Phaser.Game({
     // This small 2D room uses the broadly supported Canvas renderer; a GPU or
@@ -22,7 +22,7 @@ export function createRoom(parent: HTMLElement, equipment: readonly Equipment[],
     fps: { target: 60, smoothStep: true },
     callbacks: {
       postBoot: (instance) => {
-        instance.canvas.setAttribute('aria-label', 'Кабинет информатики. Двигайтесь WASD или стрелками; E — осмотреть ближайшее оборудование.');
+        instance.canvas.setAttribute('aria-label', 'Локация ECO DETECTIVE. Двигайтесь WASD или стрелками; E — осмотреть ближайший объект.');
         instance.canvas.setAttribute('role', 'img');
         instance.canvas.style.display = 'block';
       },
@@ -54,9 +54,12 @@ export function createRoom(parent: HTMLElement, equipment: readonly Equipment[],
     setTouchDirection: (direction, pressed) => scene.setTouchDirection(direction, pressed),
     setTouchVector: (vector) => scene.setTouchVector(vector),
     changeZoom: (delta) => scene.changeZoom(delta),
+    setLevel: (level) => scene.setLevel(level),
+    setThermalView: (enabled) => scene.setThermalView(enabled),
     interact: () => scene.interact(),
     setReducedMotion: (reduced) => scene.setReducedMotion(reduced),
     setEnergyPlan: (plan) => scene.setEnergyPlan(plan),
+    setCampaignPlan: (plan) => scene.setCampaignPlan(plan),
     getPlayerPosition: () => scene.getPlayerPosition(),
   };
 }

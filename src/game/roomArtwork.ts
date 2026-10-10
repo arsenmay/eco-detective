@@ -421,7 +421,7 @@ export function drawRoom(scene: Phaser.Scene): RoomArtwork {
   label(scene, 874, 47, 'SECTOR A / 01', 11, '#4dcab6');
   label(scene, 230, 152, 'СЕГОДНЯ\nЭНЕРГИЯ = P × t', 9, '#7d9aad');
   label(scene, 123, 717, 'УЧЕБНАЯ МОДЕЛЬ • КАБИНЕТ A-01', 10, '#657e96');
-  label(scene, 822, 717, 'ОБЪЕКТЫ: 01—06', 10, '#658a96');
+  label(scene, 822, 717, 'ПРИБОРЫ И ДОКУМЕНТЫ', 10, '#658a96');
   label(scene, 467, 601, 'РАБОЧАЯ ЗОНА', 10, '#506c80');
 
   label(scene, 215, 647, 'СВЕТ / ДНЕВНОЙ РЕЖИМ', 9, '#5d7f91');
