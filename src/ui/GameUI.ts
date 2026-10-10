@@ -1,7 +1,8 @@
 import type { Equipment, GameBridge, RoomController, Settings } from '../types';
 import type { CampaignCase, CampaignCaseProgress, CampaignPlan, CampaignSave, PlanEvaluation } from '../campaign/types';
 import { CAMPAIGN_CASES } from '../data/campaign';
-import { calculateEquipmentEnergy, formatEnergy } from '../systems/energy';
+import { formatEnergy } from '../systems/energy';
+import { renderDeviceDetails } from './DeviceDetails';
 import { loadSettings, saveSettings } from '../systems/storage';
 import { loadCampaign, saveCampaign } from '../systems/campaignStorage';
 import { answerAnalysis, calculateCaseCompletion, canAnalyzeCase, createCampaign, getCampaignCase, getCampaignStats, getCaseProgress, hasRequiredEvidence, inspectCampaignEquipment, isCaseUnlocked, selectCase, submitCampaignHypothesis, submitCampaignPlan } from '../systems/campaign';
@@ -10,6 +11,8 @@ import { readAnalysisAnswers, readPlan, renderAnalysis, renderPlan, renderPlanPr
 import { icon } from './icons';
 import { FeedbackAudio } from './FeedbackAudio';
 import { VirtualJoystick } from './VirtualJoystick';
+import { renderNotebook, type NotebookTab } from './NotebookPanels';
+import { loadExtensions, saveExtensions, type GraphicsQuality } from '../systems/v3Storage';
 
 const escape = (value: string): string => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
@@ -17,6 +20,9 @@ export class GameUI {
   readonly roomParent: HTMLElement;
   readonly bridge: GameBridge;
   private controller: RoomController | null = null;
+  private readonly extensionLoad = loadExtensions();
+  private extensions = this.extensionLoad.save;
+  private notebookTab: NotebookTab = 'evidence';
   private readonly loaded = loadCampaign();
   private campaign: CampaignSave | null = this.loaded.save;
   private activeCase: CampaignCase = getCampaignCase(this.campaign?.currentCaseId ?? CAMPAIGN_CASES[0].id);
@@ -60,11 +66,13 @@ export class GameUI {
       else this.syncActive();
     });
     this.bindTouchControls();
+    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => this.applySettings());
     this.applySettings();
     this.updateMenu();
     this.updateHud();
     if (this.loaded.warning) this.toast(this.loaded.warning);
     else if (this.loaded.migrated) { this.persist(); this.toast('Сохранение перенесено в кампанию. Позиция, улики и результаты первого дела сохранены.'); }
+    else if (this.extensionLoad.warning) this.toast(this.extensionLoad.warning);
   }
 
   connect(controller: RoomController): void {
@@ -104,7 +112,7 @@ export class GameUI {
         <main class="scene-area">
           <div class="mobile-hud"><button data-action="menu" class="icon-button" aria-label="Главное меню">${icon('back')}</button><div><span>ДЕЛО 001 / ЛОКАЦИЯ</span><strong>Школьная аномалия</strong></div><button data-action="notebook" class="mobile-notebook" aria-label="Блокнот и задания">${icon('folder')} <b id="mobile-evidence-count">0/6</b></button><button data-action="settings" class="icon-button" aria-label="Настройки">${icon('settings')}</button></div><div class="scene-heading"><div><span class="eyebrow">ЛОКАЦИЯ 01 / ИССЛЕДОВАНИЕ</span><h2>Кабинет информатики <span>2 этаж</span></h2></div><div class="room-status"><i></i> СИМУЛЯЦИЯ АКТИВНА</div></div>
           <div class="mission-strip"><span class="mission-avatar">${icon('search')}</span><div><span id="mission-phase">БЮРО / ЗАДАНИЕ</span><p id="mission-message">Найдите причины лишнего расхода энергии.</p></div><button class="icon-button" data-action="briefing" aria-label="Открыть задание">${icon('folder')}</button></div>
-          <div class="room-frame"><p id="mobile-objective" class="mobile-objective"></p><div class="camera-tools"><button id="thermal-tool" data-action="thermal" aria-pressed="false" aria-label="Виртуальный тепловизор" hidden>${icon('heating')}</button><button data-action="notebook" aria-label="Блокнот и текущая цель">${icon('folder')}</button><button data-action="zoom-in" aria-label="Приблизить">+</button><button data-action="zoom-out" aria-label="Отдалить">−</button><button data-action="fullscreen" aria-label="Полноэкранный режим">⛶</button></div><div id="room-canvas" role="img" aria-label="Игровой кабинет информатики. Управляйте персонажем WASD или стрелками, E — осмотр." tabindex="0"></div><div class="room-label">${icon('search')} <span>РЕЖИМ ДЕТЕКТИВА</span></div><div class="room-coordinate"><span>N</span><i>↑</i></div><div class="room-scale"><span></span> 1 ИГРОВОЙ МЕТР</div><div class="scan-legend"><i></i> ОБЪЕКТ ДЛЯ ОСМОТРА</div></div>
+          <div class="room-frame"><p id="mobile-objective" class="mobile-objective"></p><div class="camera-tools"><button data-action="cases" aria-label="Карта расследований">${icon('map')}</button><button id="thermal-tool" data-action="thermal" aria-pressed="false" aria-label="Виртуальный тепловизор" hidden>${icon('heating')}</button><button data-action="notebook" aria-label="Блокнот и текущая цель">${icon('folder')}</button><button data-action="zoom-in" aria-label="Приблизить">+</button><button data-action="zoom-out" aria-label="Отдалить">−</button><button data-action="fullscreen" aria-label="Полноэкранный режим">⛶</button></div><div id="room-canvas" role="img" aria-label="Игровой кабинет информатики. Управляйте персонажем WASD или стрелками, E — осмотр." tabindex="0"></div><div class="room-label">${icon('search')} <span>РЕЖИМ ДЕТЕКТИВА</span></div><div class="room-coordinate"><span>N</span><i>↑</i></div><div class="room-scale"><span></span> 1 ИГРОВОЙ МЕТР</div><div class="scan-legend"><i></i> ОБЪЕКТ ДЛЯ ОСМОТРА</div></div>
           <div class="scene-footer"><div id="nearby-hint" class="nearby-hint">${icon('search')} Подойдите к устройству с бирюзовой меткой</div><div class="keyboard-guide"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> движение</span><span><kbd>E</kbd> осмотр</span></div></div>
           <div class="touch-controls" aria-label="Сенсорное управление"><div id="virtual-joystick" class="virtual-joystick" aria-label="Виртуальный джойстик: двигайте палец в нужном направлении"><span class="joystick-knob">${icon('search')}</span></div><button id="touch-interact" class="touch-interact" data-action="interact" disabled>${icon('search')}<span>Осмотреть</span></button></div>
           <p class="scenario-note">Вымышленная планировка и учебные ситуации. Показатели демонстрационные, а не измерения в школе.</p>
@@ -116,8 +124,8 @@ export class GameUI {
           <div class="launcher-actions"><button id="install-game" class="launcher-button">${icon('save')} Установить</button><button id="share-game" class="launcher-button">${icon('arrow')} Поделиться игрой</button></div><p id="offline-status" class="offline-status" role="status" aria-live="polite"></p>
           <p id="menu-campaign-progress" class="campaign-progress"></p><div class="menu-meta"><span>05 РАССЛЕДОВАНИЙ</span><span>РАЗНЫЕ ГОЛОВОЛОМКИ</span><span>ОДНА КАМПАНИЯ</span></div>
         </div>
-        <div class="menu-case-preview"><div class="preview-cross">+</div><span class="eyebrow">ПЕРВОЕ ДЕЛО</span><h2>Школьная аномалия</h2><p>Минск · Условная модель СШ №225</p><div class="preview-line"><span class="status-dot"></span> НУЖНО ВАШЕ РАССЛЕДОВАНИЕ <span>001</span></div></div>
-        <div class="menu-bottom"><span>УЧИТЕСЬ ЗАМЕЧАТЬ. УЧИТЕСЬ БЕРЕЧЬ.</span><span>КАМПАНИЯ / v2.0</span></div>
+        <div class="menu-case-preview"><div class="preview-cross">+</div><span class="eyebrow">ПЕРВОЕ ДЕЛО</span><h2>Школьная аномалия</h2><p>Минск · Условная модель СШ №225</p><span class="menu-version">2.5D · ЛОКАЛЬНОЕ РАССЛЕДОВАНИЕ</span><div class="preview-line"><span class="status-dot"></span> НУЖНО ВАШЕ РАССЛЕДОВАНИЕ <span>001</span></div></div>
+        <div class="menu-bottom"><span>УЧИТЕСЬ ЗАМЕЧАТЬ. УЧИТЕСЬ БЕРЕЧЬ.</span><span>РАЗРАБОТКА / v3.0</span></div>
       </section>
       <div id="modal-layer" class="modal-layer" hidden></div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -155,6 +163,7 @@ export class GameUI {
       case 'tag-evidence': this.toggleSuspect(button.dataset.id); break;
       case 'thermal': this.thermalView = !this.thermalView; this.controller?.setThermalView(this.thermalView); button.setAttribute('aria-pressed', String(this.thermalView)); this.toast(this.thermalView ? 'Тепловизор: учебная модель окон и дверей. Цвет показывает потенциальные потери.' : 'Тепловизор выключен'); break;
       case 'notebook': this.showNotebook(); break;
+      case 'notebook-tab': if (['evidence', 'connections', 'tasks', 'history'].includes(button.dataset.tab ?? '')) { this.notebookTab = button.dataset.tab as NotebookTab; this.showNotebook(); } break;
       case 'zoom-in': this.controller?.changeZoom(.15); break;
       case 'zoom-out': this.controller?.changeZoom(-.15); break;
       case 'fullscreen': void this.toggleFullscreen(); break;
@@ -164,6 +173,11 @@ export class GameUI {
 
   private handleChange(event: Event): void {
     const input = event.target as HTMLInputElement;
+    if (input.dataset.v3Setting === 'graphicsQuality' && ['auto', 'low', 'medium', 'high'].includes(input.value)) {
+      this.extensions.preferences.graphicsQuality = input.value as GraphicsQuality;
+      this.applySettings();
+      if (!saveExtensions(this.extensions)) this.toast('Настройки графики действуют до закрытия страницы: хранилище недоступно.');
+    }
     if (input.name === 'report-option') {
       this.selectedOption = input.value;
       this.root.querySelector<HTMLButtonElement>('#submit-report')!.disabled = !this.root.querySelector('input[name="report-option"]:checked');
@@ -198,8 +212,15 @@ export class GameUI {
       return;
     }
     if (event.code === 'Escape') { event.preventDefault(); this.closeModal(); }
+    if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && document.activeElement?.classList.contains('notebook-tab')) {
+      event.preventDefault();
+      const tabs = [...this.root.querySelectorAll<HTMLButtonElement>('.notebook-tab')];
+      const next = (tabs.indexOf(document.activeElement as HTMLButtonElement) + (event.code === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      const id = tabs[next]?.dataset.tab;
+      if (id) { this.notebookTab = id as NotebookTab; this.showNotebook(); this.root.querySelector<HTMLButtonElement>(`[data-tab="${id}"]`)?.focus(); }
+    }
     if (event.code === 'Tab') {
-      const items = [...this.root.querySelectorAll<HTMLElement>('#modal-layer button:not(:disabled), #modal-layer input, #modal-layer [tabindex="0"]')];
+      const items = [...this.root.querySelectorAll<HTMLElement>('#modal-layer button:not(:disabled), #modal-layer input:not(:disabled), #modal-layer select:not(:disabled), #modal-layer textarea:not(:disabled), #modal-layer [tabindex="0"]')].filter((element) => element.getClientRects().length > 0);
       const first = items[0]; const last = items.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -219,7 +240,8 @@ export class GameUI {
 
   private applyControllerState(): void {
     if (!this.controller) return;
-    this.controller.setReducedMotion(this.settings.reducedMotion);
+    this.controller.setReducedMotion(this.motionReduced());
+    this.controller.setGraphicsQuality(this.extensions.preferences.graphicsQuality);
     this.controller.setInspected(this.progress?.inspectedIds ?? []);
     this.controller.setEnergyPlan(this.progress?.plan?.kind === 'timeline' ? this.progress.plan : this.progress?.appliedPlan ?? null);
     this.controller.setThermalView(this.thermalView);
@@ -283,19 +305,25 @@ export class GameUI {
   }
 
   private persist(): void {
+    const extensionSaved = saveExtensions(this.extensions);
     if (!this.progress || !this.campaign) return;
     if (this.controller && this.playing && this.ready) this.progress.playerPosition = this.controller.getPlayerPosition();
     this.progress.updatedAt = new Date().toISOString();
     this.campaign = { ...this.campaign, cases: { ...this.campaign.cases, [this.activeCase.id]: { ...this.progress } }, updatedAt: this.progress.updatedAt };
-    this.persistFailed = !saveCampaign(this.campaign);
+    this.persistFailed = !saveCampaign(this.campaign) || !extensionSaved;
     this.lastSavedAt = Date.now();
     this.updateSaveStatus();
   }
 
+  private motionReduced(): boolean {
+    return this.settings.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
   private applySettings(): void {
-    this.root.classList.toggle('reduced-motion', this.settings.reducedMotion);
+    this.root.classList.toggle('reduced-motion', this.motionReduced());
     this.root.classList.toggle('hide-hints', !this.settings.showHints);
-    this.controller?.setReducedMotion(this.settings.reducedMotion);
+    this.controller?.setReducedMotion(this.motionReduced());
+    this.controller?.setGraphicsQuality(this.extensions.preferences.graphicsQuality);
     this.audio.setEnabled(this.settings.soundEnabled);
     this.joystick?.setSensitivity(this.settings.joystickSensitivity);
   }
@@ -394,19 +422,7 @@ export class GameUI {
   }
 
   private deviceContent(device: Equipment, recorded = true): string {
-    if (device.mode.powerWatts === 0) {
-      return `<div class="device-summary"><div class="device-large-icon">${icon(device.category)}</div><div><span class="chip">УЧЕБНЫЙ ИСТОЧНИК ДАННЫХ</span><p>${escape(device.description)}</p></div></div><div class="mode-line"><span>Тип источника</span><strong>${escape(device.mode.label)}</strong></div>${recorded ? `<div class="evidence-note"><span>${icon('search')} НАБЛЮДЕНИЕ И ДОКАЗАТЕЛЬСТВО</span><p>${escape(device.evidence)}</p></div><div class="recommendation"><span>${icon('leaf')} ВЫВОД ДЛЯ ПРОВЕРКИ</span><p>${escape(device.recommendation)}</p></div>` : `<div class="scan-card"><span class="scan-emblem">${icon('search')}</span><div><strong>Найден новый источник</strong><p>Прочитайте описание и запишите свидетельство для сравнения с другими данными.</p></div></div>`}<p class="demo-footnote">Документы и пассивные теплопотери не считаются электрическими приборами. Показания и параметры заданы для обучения; это не школьные измерения.</p><div class="modal-actions">${recorded ? '<button class="button secondary" data-action="notebook">К доске расследования</button><button class="button primary" data-action="close">В локацию</button>' : `<button class="button secondary" data-action="close">Позже</button><button class="button primary" data-action="record-evidence" data-id="${device.id}">Записать улику ${icon('check')}</button>`}</div>`;
-    }
-    const energy = calculateEquipmentEnergy(device, this.activeCase.workingDays);
-    const power = device.mode.powerWatts;
-    const totalPower = power * device.quantity;
-    return `<div class="device-summary"><div class="device-large-icon">${icon(device.category)}</div><div><span class="chip">ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ</span><p>${escape(device.description)}</p></div></div>
-      <div class="device-stats"><div><span>Мощность одного</span><strong>${power}<small> Вт</small></strong></div><div><span>Работа в день</span><strong>${device.mode.hoursPerDay}<small> ч</small></strong></div><div><span>Количество</span><strong>${device.quantity}<small> шт.</small></strong></div></div>
-      <div class="mode-line"><span>Режим работы</span><strong>${escape(device.mode.label)}</strong></div>
-      <div class="energy-calculation"><div><span>ЭНЕРГИЯ ЗА ${this.activeCase.workingDays} УЧЕБНЫХ ДНЕЙ</span><strong>${formatEnergy(energy.monthlyKwh)} <small>кВт·ч</small></strong></div>${icon('bolt')}<p>${power} Вт × ${device.mode.hoursPerDay} ч × ${device.quantity} шт. ÷ 1000 = <b>${formatEnergy(energy.dailyKwh)} кВт·ч / день</b></p><p>${formatEnergy(energy.dailyKwh)} × ${this.activeCase.workingDays} дней = ${formatEnergy(energy.monthlyKwh)} кВт·ч</p></div>
-      <div class="device-timeline"><span>РЕЖИМ НА ШКАЛЕ СУТОК</span><div class="hours-track"><i style="width:${device.mode.hoursPerDay / 24 * 100}%"></i></div><div><small>00:00</small><strong>${device.mode.hoursPerDay} ч работы в день</strong><small>24:00</small></div></div>
-      ${recorded ? `<div class="evidence-note"><span>${icon('search')} НАБЛЮДЕНИЕ ДЕТЕКТИВА</span><p>${escape(device.evidence)}</p></div><div class="recommendation"><span>${icon('leaf')} БЕЗОПАСНОЕ ИЗМЕНЕНИЕ</span><p>${escape(device.recommendation)}</p>${device.proposedMode ? `<small>Учебная оценка при ${device.proposedMode.hoursPerDay} ч/день и ${device.proposedMode.powerWatts} Вт: до ${formatEnergy(energy.potentialSavingsKwh)} кВт·ч за ${this.activeCase.workingDays} учебных дней.</small>` : '<small>В сценарии дополнительная экономия для этого режима не заявлена.</small>'}</div>` : `<div class="scan-card"><span class="scan-emblem">${icon('search')}</span><div><strong>Характеристики получены</strong><p>Запишите режим работы и наблюдение в блокнот, чтобы использовать их в отчёте.</p></div></div>`}
-      <div class="demo-footnote">${icon('info')} Формула E = P × t / 1000. Для группы устройств учитывается количество. Все характеристики заданы для обучения; это не реальные измерения СШ №225.</div><div class="modal-actions">${recorded ? `<button class="button primary" data-action="close">Вернуться к расследованию ${icon('arrow')}</button>` : `<button class="button secondary" data-action="close">Позже</button><button class="button primary" data-action="record-evidence" data-id="${device.id}">Записать улику ${icon('check')}</button>`}</div><span class="sr-only">Суммарная мощность группы: ${totalPower} Вт</span>`;
+    return renderDeviceDetails(device, this.activeCase.workingDays, recorded);
   }
 
   private showReport(): void {
@@ -461,8 +477,7 @@ export class GameUI {
   }
 
   private showNotebook(): void {
-    const inspected = this.progress?.inspectedIds ?? [];
-    this.showModal('Доска расследования', `<p>${escape(this.root.querySelector('#mission-message')!.textContent ?? '')}</p><div class="notebook-grid">${this.activeCase.equipment.map((device) => `<div class="notebook-evidence"><button class="evidence-item ${inspected.includes(device.id) ? 'found' : ''}" data-action="evidence" data-id="${device.id}" ${inspected.includes(device.id) ? '' : 'disabled'}><span class="evidence-icon">${icon(device.category)}</span><span>${escape(device.shortName)}<small>${inspected.includes(device.id) ? 'Открыть данные и наблюдение' : 'Ещё не исследовано'}</small></span>${icon(inspected.includes(device.id) ? 'check' : 'lock')}</button>${inspected.includes(device.id) ? `<button class="suspect-tag ${this.progress?.taggedEquipmentIds.includes(device.id) ? 'tagged' : ''}" data-action="tag-evidence" data-id="${device.id}">${this.progress?.taggedEquipmentIds.includes(device.id) ? 'Подозрение отмечено' : 'Отметить подозрение'}</button>` : ''}</div>`).join('')}</div><div class="evidence-connections"><h3>Связи между источниками</h3>${this.activeCase.analysis.map((question) => `<div><span>${(question.evidenceIds ?? []).map((id) => escape(this.activeCase.equipment.find((device) => device.id === id)?.shortName ?? id)).join(' ↔ ')}</span><p>${escape(question.prompt)}</p><small>${this.progress?.analysisSolved ? `✓ ${escape(question.explanation)}` : 'Сопоставьте эти данные в анализе. Сохраните назначения необходимых систем.'}</small></div>`).join('')}</div><div class="modal-actions"><button class="button secondary" data-action="close">В локацию</button>${this.progress && (hasRequiredEvidence(this.activeCase, this.progress) || this.progress.completed) ? `<button class="button primary" data-action="report">${this.progress.completed ? 'Итоговый отчёт' : !this.progress.analysisSolved ? 'Анализ улик' : !this.progress.reportSolved ? 'Гипотеза' : 'План решения'} ${icon('arrow')}</button>` : ''}</div>`, 'УЛИКИ, ПОДОЗРЕНИЯ И ПРОТИВОРЕЧИЯ', 'wide-modal');
+    this.showModal('Цифровой блокнот', renderNotebook(this.activeCase, this.progress, this.root.querySelector('#mission-message')!.textContent ?? '', this.notebookTab), 'УЛИКИ / СВЯЗИ / ЗАДАНИЯ / ИСТОРИЯ', 'wide-modal');
   }
 
   private toggleSuspect(id?: string): void {
@@ -517,7 +532,7 @@ export class GameUI {
   }
 
   private showSettings(): void {
-    this.showModal('Настройки', `<label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Звуки расследования</strong><small>Тихие сигналы новых улик, гипотез и результатов</small></span><input type="checkbox" data-setting="soundEnabled" ${this.settings.soundEnabled ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="sensitivity-setting">Чувствительность джойстика<input type="range" min="0.5" max="1.5" step="0.1" value="${this.settings.joystickSensitivity}" data-setting="joystickSensitivity" /><small>Слева — точное медленное движение, справа — быстрый отклик.</small></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук включается вами и создаётся локально. Переназначение клавиш пока не реализовано. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
+    this.showModal('Настройки', `<label class="graphics-setting"><span>Качество графики</span><select data-v3-setting="graphicsQuality">${([['auto', 'Авто'], ['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']] as const).map(([value, title]) => `<option value="${value}" ${this.extensions.preferences.graphicsQuality === value ? 'selected' : ''}>${title}</option>`).join('')}</select><small>Авто: среднее на мобильном экране, высокое на ПК. Низкое выключает частицы и часть световых эффектов.</small></label><label class="setting-row"><span><strong>Меньше анимации</strong><small>Уменьшить движение и свечение интерфейса</small></span><input type="checkbox" data-setting="reducedMotion" ${this.settings.reducedMotion ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Подсказки управления</strong><small>Показывать клавиши на игровом экране</small></span><input type="checkbox" data-setting="showHints" ${this.settings.showHints ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="setting-row"><span><strong>Звуки расследования</strong><small>Тихие сигналы новых улик, гипотез и результатов</small></span><input type="checkbox" data-setting="soundEnabled" ${this.settings.soundEnabled ? 'checked' : ''} /><span class="switch" aria-hidden="true"></span></label><label class="sensitivity-setting">Чувствительность джойстика<input type="range" min="0.5" max="1.5" step="0.1" value="${this.settings.joystickSensitivity}" data-setting="joystickSensitivity" /><small>Слева — точное медленное движение, справа — быстрый отклик.</small></label><div class="future-note">${icon('save')}<div><strong>Всё остаётся на вашем устройстве</strong><p>Игра сохраняет позицию, записи и отчёт в localStorage. При очистке данных браузера сохранение удаляется.</p></div></div><p class="demo-footnote">Звук включается вами и создаётся локально. Переназначение клавиш пока не реализовано. Текущий прототип не требует регистрации и API-ключей.</p>`, 'ПАРАМЕТРЫ СИСТЕМЫ');
   }
 
   private showHelp(): void {

@@ -157,6 +157,59 @@ describe('five distinct demonstration energy puzzles', () => {
     assert.match(incompatible.feedback.join(' '), /не даёт дополнительной экономии/);
     assert.equal(incompatible.budgetUsed, 3);
   });
+  it('explains the actual warmer plus LED kitchen solution rather than an unselected ventilation timer', () => {
+    const result = evaluatePlan(level('kitchen'), { kind: 'kitchen', upgradeIds: ['warmer-schedule', 'led'] });
+    const formulas = result.formulas.join(' ');
+    const consequences = result.consequences.join(' ');
+    assert.equal(result.passes, true);
+    approximately(result.electricBeforeKwh - result.electricAfterKwh, 48 + 16);
+    assert.match(formulas, /Мармит: 1200 × \(5 − 3\).*48 кВт·ч/);
+    assert.match(formulas, /Освещение: \(180 − 100\) × 10 × 20 \/ 1000 = 16 кВт·ч/);
+    assert.match(formulas, /экономия 64 кВт·ч/);
+    assert.doesNotMatch(formulas, /Вытяжка:|Уплотнители:|Отключение холодильника|Отключение морозильника/);
+    assert.match(consequences, /Мармит сохраняет 3 часа раздачи/);
+    assert.match(consequences, /Светодиодная группа потребляет 100 вместо 180 Вт/);
+    assert.doesNotMatch(consequences, /Таймер вытяжки|снижает среднюю мощность холодильника/);
+  });
+  it('shows only selected kitchen schedule and refrigerator maintenance formulas with matching reductions', () => {
+    const timer = evaluatePlan(level('kitchen'), { kind: 'kitchen', upgradeIds: ['ventilation-timer'] });
+    approximately(timer.electricBeforeKwh - timer.electricAfterKwh, 24);
+    assert.match(timer.formulas.join(' '), /Вытяжка: 300 × \(10 − 6\).*24 кВт·ч/);
+    assert.doesNotMatch(timer.formulas.join(' '), /Мармит:|Освещение:|Уплотнители:/);
+    assert.match(timer.consequences.join(' '), /Таймер вытяжки сохраняет необходимые 6 часов/);
+    assert.doesNotMatch(timer.consequences.join(' '), /Мармит сохраняет 3 часа|Светодиодная группа/);
+
+    const seals = evaluatePlan(level('kitchen'), { kind: 'kitchen', upgradeIds: ['fridge-seals'] });
+    approximately(seals.electricBeforeKwh - seals.electricAfterKwh, 7.2);
+    assert.match(seals.formulas.join(' '), /Уплотнители: \(120 − 105\) × 24 × 20 \/ 1000 = 7,2 кВт·ч/);
+    assert.match(seals.consequences.join(' '), /снижает среднюю мощность холодильника до 105 Вт/);
+    assert.doesNotMatch(seals.formulas.join(' '), /Мармит:|Вытяжка:|Освещение:/);
+
+    const unchanged = evaluatePlan(level('kitchen'), { kind: 'kitchen', upgradeIds: [] });
+    approximately(unchanged.electricAfterKwh, unchanged.electricBeforeKwh);
+    assert.match(unchanged.formulas.join(' '), /Меры не выбраны/);
+    assert.doesNotMatch(unchanged.formulas.join(' '), /Мармит:|Вытяжка:|Освещение:|Уплотнители:/);
+  });
+  it('labels unsafe cooling shutdown reductions and explains why seals cannot add savings after shutdown', () => {
+    const unsafe = evaluatePlan(level('kitchen'), { kind: 'kitchen', upgradeIds: ['fridge-off', 'freezer-off', 'fridge-seals'] });
+    const formulas = unsafe.formulas.join(' ');
+    approximately(unsafe.electricBeforeKwh - unsafe.electricAfterKwh, 57.6 + 76.8);
+    assert.equal(unsafe.safe, false);
+    assert.equal(unsafe.passes, false);
+    assert.match(formulas, /Отключение холодильника: 120 × 24 × 20 \/ 1000 = 57,6 кВт·ч.*небезопасен/);
+    assert.match(formulas, /Отключение морозильника: 160 × 24 × 20 \/ 1000 = 76,8 кВт·ч.*небезопасен/);
+    assert.match(formulas, /Уплотнители: холодильник уже отключён, дополнительное снижение расхода = 0 кВт·ч/);
+    assert.doesNotMatch(formulas, /7,2 кВт·ч/);
+    assert.doesNotMatch(unsafe.consequences.join(' '), /снижает среднюю мощность холодильника до 105 Вт/);
+  });
+  it('does not describe a selected computer sleep mode in the final report when the project is absent', () => {
+    const unchanged = evaluatePlan(level('crisis'), { kind: 'crisis', projectIds: ['gym-window', 'warmer-schedule'], priorityId: 'gym-window' });
+    assert.match(unchanged.consequences.join(' '), /Режим компьютеров не изменён/);
+    assert.doesNotMatch(unchanged.consequences.join(' '), /требует предварительного сохранения файлов/);
+    const sleep = evaluatePlan(level('crisis'), winningPlan(level('crisis')));
+    assert.match(sleep.consequences.join(' '), /Переход компьютеров в сон требует предварительного сохранения файлов/);
+    assert.doesNotMatch(sleep.consequences.join(' '), /Режим компьютеров не изменён/);
+  });
   it('requires real strings for lighting modes rather than accepting coerced array keys', () => {
     const lighting = level('lighting');
     const good = winningPlan(lighting);

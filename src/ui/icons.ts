@@ -1,4 +1,9 @@
 const paths: Record<string, string> = {
+  map: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/>',
+  cube: '<path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm0 10v10M3 7l9 5 9-5M7.5 4.5l9 5"/>',
+  robot: '<rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 7V3m-1 0h2M1 12h3m16 0h3M8 16h8"/><circle cx="8" cy="11" r="1"/><circle cx="16" cy="11" r="1"/>',
+  pause: '<path d="M8 4v16m8-16v16"/>',
+  school: '<path d="m3 10 9-7 9 7v11H3V10Zm7 11v-6h4v6M6 12h1m10 0h1M6 16h1m10 0h1"/>',
   leaf: '<path d="M20 4c-8-2-16 2-16 9a7 7 0 0 0 7 7c7 0 11-8 9-16Z"/><path d="M5 19 15 9M10 14v-5M10 14h5"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',

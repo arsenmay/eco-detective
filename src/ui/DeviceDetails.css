@@ -1,0 +1,43 @@
+.device-inspection-card { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 20px; padding: 18px; border: 1px solid #37566b; border-radius: 12px; background: linear-gradient(120deg, #193847a6, #12283b); }
+.device-schematic { position: relative; display: grid; place-items: center; min-height: 106px; color: #8bddce; border: 1px solid #48788770; border-radius: 8px; background: repeating-linear-gradient(0deg, transparent 0, transparent 17px, #70b9b408 17px, #70b9b408 18px), repeating-linear-gradient(90deg, transparent 0, transparent 17px, #70b9b408 17px, #70b9b408 18px), radial-gradient(circle, #60c5b319, transparent 70%); overflow: hidden; }
+.device-schematic > .icon { width: 48px; height: 48px; stroke-width: 1.2; margin-top: 4px; }
+.device-schematic > small { position: absolute; bottom: 8px; color: #82aaa9; font: 7px ui-monospace, monospace; letter-spacing: .6px; }
+.device-schematic-reticle { position: absolute; inset: 9px; background: linear-gradient(#91ded2, #91ded2) top left/8px 1px no-repeat, linear-gradient(#91ded2, #91ded2) top left/1px 8px no-repeat, linear-gradient(#91ded2, #91ded2) bottom right/8px 1px no-repeat, linear-gradient(#91ded2, #91ded2) bottom right/1px 8px no-repeat; opacity: .65; pointer-events: none; }
+.device-inspection-card .chip { font-size: 8px; letter-spacing: .8px; }
+.device-inspection-card .device-summary p { margin: 11px 0 12px; }
+.device-record-state { display: flex; align-items: center; gap: 6px; font-size: 10px; line-height: 1.5; color: #8bbbaf; }
+.device-record-state .icon { width: 13px; height: 13px; flex-shrink: 0; }
+.device-details .device-group-power { border-top: 0; }
+.device-group-power small { color: #7c9eb0; font-size: 10px; font-weight: 400; }
+.device-details .device-daily-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #416d5e75; }
+.device-details .device-daily-total > span { margin: 0; font-size: 11px; letter-spacing: 0; color: #9ac7b7; }
+.device-daily-total b { font-size: 15px; font-weight: 550; color: #b9e9d7; white-space: nowrap; }
+.device-duration-note { margin: 9px 0 0; color: #7798ac; font-size: 10px; line-height: 1.5; }
+.device-duration-labels { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #829eae; margin-top: 8px; }
+.device-duration-labels small, .device-duration-labels strong { font-size: 10px; font-weight: 400; }
+.passive-data-card { display: flex; gap: 13px; padding: 17px; margin-top: 19px; border: 1px solid #4a5c70; border-radius: 9px; background: #1b3044; }
+.passive-data-card > span { flex-shrink: 0; color: #c7ba9c; }
+.passive-data-card .icon { width: 25px; height: 25px; }
+.passive-data-card strong { color: #d3dbdf; font-size: 13px; font-weight: 550; }
+.passive-data-card p { margin: 7px 0 0; font-size: 12px; line-height: 1.7; color: #9db5c5; }
+.device-model-actions { margin-top: 20px; }
+.device-model-button { width: 100%; justify-content: center; }
+@media (max-width: 600px) {
+  .device-inspection-card { grid-template-columns: 65px minmax(0, 1fr); padding: 13px; gap: 12px; align-items: start; }
+  .device-schematic { min-height: 82px; }
+  .device-schematic > .icon { width: 35px; height: 35px; }
+  .device-schematic > small { font-size: 5px; letter-spacing: 0; }
+  .device-inspection-card .chip { font-size: 7px; letter-spacing: .2px; padding: 4px; }
+  .device-inspection-card .device-summary p { font-size: 12px !important; line-height: 1.65; margin: 9px 0; }
+  .device-record-state { font-size: 10px; }
+  .device-details .device-stats { gap: 7px; }
+  .device-details .device-stats strong { font-size: 27px; }
+  .device-details .device-stats strong small { font-size: 11px; }
+  .device-details .device-stats span { font-size: 10px; }
+  .device-details .mode-line { font-size: 12px; }
+  .device-details .mode-line strong { max-width: 65%; }
+  .device-details .energy-calculation { padding: 17px; }
+  .device-details .energy-calculation p { font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+  .device-duration-note { font-size: 11px; }
+  .passive-data-card { padding: 14px; gap: 10px; }
+}
