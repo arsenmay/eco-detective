@@ -13,6 +13,7 @@ import { FeedbackAudio } from './FeedbackAudio';
 import { VirtualJoystick } from './VirtualJoystick';
 import { renderNotebook, type NotebookTab } from './NotebookPanels';
 import { loadExtensions, saveExtensions, type GraphicsQuality } from '../systems/v3Storage';
+import { getDeviceModel } from '../inspection/catalog';
 
 const escape = (value: string): string => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
@@ -37,6 +38,8 @@ export class GameUI {
   private lastSavedAt = 0;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private previousFocus: HTMLElement | null = null;
+  private modalCleanup: (() => void) | undefined;
+  private modalVersion = 0;
   private readonly audio = new FeedbackAudio();
   private draftPlan: CampaignPlan = defaultPlan(this.activeCase);
   private thermalView = false;
@@ -155,6 +158,8 @@ export class GameUI {
       case 'retry-report': this.showReport(); break;
       case 'briefing': this.showBriefing(); break;
       case 'record-evidence': if (button.dataset.id) this.recordEvidence(button.dataset.id); break;
+      case 'inspect-3d': if (button.dataset.id) void this.show3DInspection(button.dataset.id); break;
+      case 'device-back': if (button.dataset.id) this.openEquipment(button.dataset.id, true); break;
       case 'energy-plan': if (this.progress?.reportSolved && (this.progress.analysisSolved || this.progress.completed)) this.showEnergyPlan(); break;
       case 'submit-plan': this.commitEnergyPlan(); break;
       case 'submit-analysis': this.submitAnalysis(); break;
@@ -422,7 +427,39 @@ export class GameUI {
   }
 
   private deviceContent(device: Equipment, recorded = true): string {
-    return renderDeviceDetails(device, this.activeCase.workingDays, recorded);
+    return renderDeviceDetails(device, this.activeCase.workingDays, recorded, { modelAvailable: getDeviceModel(device) !== null });
+  }
+
+  private async show3DInspection(id: string): Promise<void> {
+    const device = this.activeCase.equipment.find((entry) => entry.id === id);
+    const definition = device && getDeviceModel(device);
+    if (!device || !definition || !this.progress || !this.modalOpen) return;
+    this.showModal(device.name, `<div id="device-viewer"><p role="status">Подготавливаем 3D-модель…</p></div><div class="modal-actions"><button class="button secondary" data-action="device-back" data-id="${escape(id)}">${icon('back')} К паспорту устройства</button><button class="button primary" data-action="close">В локацию</button></div>`, '3D / ИНТЕРАКТИВНЫЙ ОСМОТР', 'wide-modal inspection-modal');
+    const version = this.modalVersion;
+    try {
+      // The school remains Canvas-based. Three.js is loaded only for this panel.
+      const { createDeviceViewer } = await import('../inspection/DeviceViewer');
+      const host = this.root.querySelector<HTMLElement>('#device-viewer');
+      if (!host?.isConnected || !this.modalOpen || version !== this.modalVersion) return;
+      let viewer: ReturnType<typeof createDeviceViewer> | undefined;
+      viewer = createDeviceViewer(host, device, this.activeCase.workingDays, {
+        quality: this.extensions.preferences.graphicsQuality,
+        reducedMotion: this.motionReduced(),
+        onPart: () => {
+          if (!viewer?.supported) return;
+          const rewardId = `v3:model:${definition.id}`;
+          if (!this.extensions.profile.rewardIds.includes(rewardId)) {
+            this.extensions.profile.rewardIds.push(rewardId);
+            this.persist();
+          }
+        },
+      });
+      this.modalCleanup = () => viewer?.dispose();
+    } catch {
+      if (version !== this.modalVersion || !this.modalOpen) return;
+      const host = this.root.querySelector<HTMLElement>('#device-viewer');
+      if (host) host.innerHTML = `<p class="demo-footnote" role="status">3D-модуль сейчас недоступен. Открыт 2D-паспорт с теми же данными; можно продолжать расследование.</p>${renderDeviceDetails(device, this.activeCase.workingDays, this.progress.inspectedIds.includes(id))}`;
+    }
   }
 
   private showReport(): void {
@@ -542,6 +579,9 @@ export class GameUI {
   }
 
   private showModal(title: string, body: string, eyebrow: string, className = ''): void {
+    this.modalVersion += 1;
+    this.modalCleanup?.();
+    this.modalCleanup = undefined;
     if (!this.modalOpen) this.previousFocus = document.activeElement as HTMLElement | null;
     this.modalOpen = true;
     const layer = this.root.querySelector<HTMLElement>('#modal-layer')!;
@@ -555,6 +595,9 @@ export class GameUI {
   }
 
   private closeModal(restoreFocus = true): void {
+    this.modalVersion += 1;
+    this.modalCleanup?.();
+    this.modalCleanup = undefined;
     this.modalOpen = false;
     const layer = this.root.querySelector<HTMLElement>('#modal-layer')!;
     layer.hidden = true; layer.innerHTML = '';

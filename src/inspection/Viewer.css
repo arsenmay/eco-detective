@@ -1,0 +1,98 @@
+.device-viewer {
+  --viewer-border: rgba(99, 206, 197, .2);
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  color: var(--text-primary, #e4f0f7);
+}
+
+.device-viewer__stage {
+  position: relative;
+  width: 100%;
+  height: clamp(250px, 38vh, 390px);
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--viewer-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 70%, rgba(60, 161, 160, .16), transparent 62%),
+    linear-gradient(145deg, #14243c, #07101e 72%);
+}
+
+.device-viewer__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.device-viewer__canvas:active { cursor: grabbing; }
+
+.device-viewer__toolbar,
+.device-viewer__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.device-viewer__tool,
+.device-viewer__part,
+.device-viewer__schematic-part {
+  min-height: 44px;
+  padding: 9px 14px;
+  color: inherit;
+  background: rgba(16, 35, 54, .84);
+  border: 1px solid var(--viewer-border);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.device-viewer__tool[aria-pressed="true"],
+.device-viewer__part[aria-pressed="true"] {
+  color: #b6ffeb;
+  border-color: #45d7b5;
+  background: rgba(33, 97, 91, .36);
+}
+
+.device-viewer__tool:disabled { opacity: .4; cursor: default; }
+.device-viewer button:focus-visible { outline: 2px solid #80ffe0; outline-offset: 3px; }
+.device-viewer__status { margin: 0; color: #9bb6c9; font-size: 12px; line-height: 1.55; }
+.device-viewer__readout { padding: 16px; background: rgba(15, 31, 49, .82); border: 1px solid var(--viewer-border); border-radius: 14px; }
+.device-viewer__readout h4 { margin: 0 0 8px; font-size: 17px; }
+.device-viewer__readout > p { margin: 0; line-height: 1.6; font-size: 13px; }
+.device-viewer__metrics { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 14px 0; font-size: 12px; line-height: 1.5; }
+.device-viewer__metrics dt { color: #9bb6c9; }
+.device-viewer__metrics dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.device-viewer__readout > .device-viewer__note { color: #93adbf; font-size: 11px; }
+.device-viewer--scanner .device-viewer__stage { border-color: #bc9b53; }
+
+.device-viewer__schematic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.device-viewer__schematic-label { grid-column: 1 / -1; text-align: center; font-size: 12px; color: #9bb6c9; }
+.device-viewer__schematic-part { background: rgba(29, 78, 84, .45); overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .device-viewer { gap: 10px; }
+  .device-viewer__stage { height: clamp(230px, 35dvh, 330px); }
+  .device-viewer__part { flex: 1 1 120px; }
+  .device-viewer__metrics { grid-template-columns: 1fr; gap: 3px; }
+  .device-viewer__metrics dd { text-align: left; margin-bottom: 7px; }
+  .device-viewer__schematic { padding: 15px; gap: 8px; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .device-viewer__stage { height: 240px; }
+}

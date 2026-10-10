@@ -1,6 +1,7 @@
 import './style.css';
 import './ui/v3Theme.css';
 import './ui/DeviceDetails.css';
+import './inspection/Viewer.css';
 import { CAMPAIGN_CASES } from './data/campaign';
 import { createRoom } from './game/createRoom';
 import { GameUI } from './ui/GameUI';
