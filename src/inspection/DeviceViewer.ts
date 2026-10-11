@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { inspectionPixelRatio } from '../rendering/graphicsQuality';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Equipment } from '../types';
 import { calculateEquipmentEnergy, formatEnergy } from '../systems/energy';
@@ -51,9 +52,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
 }
 
 function pixelRatio(quality: DeviceViewerOptions['quality']): number {
-  const compact = matchMedia('(pointer: coarse)').matches || innerWidth < 700;
-  const cap = quality === 'low' ? 1 : quality === 'medium' ? 1.5 : quality === 'high' ? 2 : compact ? 1.25 : 1.5;
-  return Math.max(1, Math.min(devicePixelRatio || 1, cap));
+  return inspectionPixelRatio(quality, window.devicePixelRatio);
 }
 
 class InspectionViewer implements DeviceViewer {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { resolveGraphicsQuality } from '../rendering/graphicsQuality';
 import type { EnergyPlan, Equipment, GameBridge, Point } from '../types';
 import type { CampaignCase, CampaignPlan } from '../campaign/types';
 import { CAMPAIGN_CASES } from '../data/campaign';
@@ -112,7 +113,7 @@ export class RoomScene extends Phaser.Scene {
     }
     this.player.animate(time, this.reducedMotion);
     this.interactions.animate(time, this.reducedMotion || !this.isActive());
-    const quality = this.graphicsQuality === 'auto' ? (this.viewport.mobile ? 'medium' : 'high') : this.graphicsQuality;
+    const quality = resolveGraphicsQuality(this.graphicsQuality);
     this.artwork?.update(time, this.isActive(), this.reducedMotion, quality);
 
     if ((moving && time - this.lastPositionTime >= 650) || (this.wasMoving && !moving)) {
