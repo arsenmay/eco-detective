@@ -1,0 +1,323 @@
+{
+  "date": "2026-10-11",
+  "scope": "Current partial v3 implementation; not the complete requested release",
+  "unit": {
+    "tests": 148,
+    "suites": 19,
+    "failed": 0
+  },
+  "commands": {
+    "npm ci": "passed",
+    "npm run typecheck": "passed",
+    "npm test": "passed",
+    "npm run build": "passed",
+    "npm run build:pages": "passed"
+  },
+  "board": {
+    "restorationNote": "Saved compatibility testing uses the genuinely completed prior campaign; this is not a new campaign walkthrough.",
+    "checks": [
+      {
+        "size": {
+          "width": 1280,
+          "height": 800
+        },
+        "caseId": "school-225-case-001",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 2,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 1280,
+          "height": 800
+        },
+        "caseId": "school-225-case-002",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 4,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 1280,
+          "height": 800
+        },
+        "caseId": "school-225-case-003",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 1280,
+          "height": 800
+        },
+        "caseId": "school-225-case-004",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 1280,
+          "height": 800
+        },
+        "caseId": "school-225-case-005",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 8,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 320,
+          "height": 568
+        },
+        "caseId": "school-225-case-001",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 2,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 320,
+          "height": 568
+        },
+        "caseId": "school-225-case-002",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 4,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 320,
+          "height": 568
+        },
+        "caseId": "school-225-case-003",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 320,
+          "height": 568
+        },
+        "caseId": "school-225-case-004",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 320,
+          "height": 568
+        },
+        "caseId": "school-225-case-005",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 8,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 390,
+          "height": 844
+        },
+        "caseId": "school-225-case-001",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 2,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 390,
+          "height": 844
+        },
+        "caseId": "school-225-case-002",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 4,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 390,
+          "height": 844
+        },
+        "caseId": "school-225-case-003",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 390,
+          "height": 844
+        },
+        "caseId": "school-225-case-004",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 6,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "size": {
+          "width": 390,
+          "height": 844
+        },
+        "caseId": "school-225-case-005",
+        "restoredHistoricalCompletion": true,
+        "requiredLinks": 8,
+        "wrongPairStoredAndExplained": true,
+        "svgAndList": true,
+        "hints": 3,
+        "rewardOnce": true,
+        "reload": true,
+        "keyboard": true,
+        "overflow": false
+      },
+      {
+        "newGame": true,
+        "unknownCannotComplete": true,
+        "uninspectedCannotComplete": true,
+        "forgedSavedEdgesFiltered": true,
+        "noReward": true
+      }
+    ],
+    "errors": []
+  },
+  "alternativePlans": {
+    "restoreNote": "Uses an honestly completed campaign and a second legacy restore of a plan genuinely accepted through the UI.",
+    "sameOriginalNoBonus": true,
+    "failedPlanNoBonus": true,
+    "unsafePlanNoBonus": true,
+    "genuineAlternatePlan": {
+      "kind": "timeline",
+      "computerHours": 2,
+      "lightingHours": 8,
+      "daylight": false
+    },
+    "bonusOnce": true,
+    "repeatNoExtraBonus": true,
+    "equivalentDaylightAtEightNoBonus": true,
+    "legacyUnknownFieldAndPropertyOrderNoBonus": true,
+    "legacyActionOrderNoBonus": true,
+    "errors": []
+  },
+  "legacyV1": {
+    "legacyV1Restored": true,
+    "completedPreserved": true,
+    "secondCaseUnlocked": true,
+    "missingSourcesExplained": true,
+    "newAnalysisAvailableAfterFixtureRecords": true,
+    "oldV1Unchanged": true,
+    "errors": []
+  },
+  "firstCase": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "freshTouchPlaythrough": true,
+    "sources": 8,
+    "beforeKwh": 151.88,
+    "afterKwh": 50.12,
+    "periodDays": 20,
+    "browserErrors": []
+  },
+  "productionPwa": {
+    "fixture": "Restored existing completed v2 QA save; this is not a new campaign playthrough.",
+    "pageErrors": [],
+    "badResponses": [],
+    "failedRequests": [],
+    "firstOfflineInspection": true,
+    "realGeometryRotation": true,
+    "secondOfflineReload": true,
+    "duplicateModelRewards": false
+  },
+  "limitations": [
+    "Chromium with software WebGL; no physical phone FPS claims",
+    "No final public deployment or final public upgrade test",
+    "New school hub, simulator and additional modes not implemented"
+  ]
+}

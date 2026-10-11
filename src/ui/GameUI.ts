@@ -14,6 +14,8 @@ import { VirtualJoystick } from './VirtualJoystick';
 import { renderNotebook, type NotebookTab } from './NotebookPanels';
 import { loadExtensions, saveExtensions, type GraphicsQuality } from '../systems/v3Storage';
 import { getDeviceModel } from '../inspection/catalog';
+import { addBoardEdge, evaluateBoard, getBoardDefinition, normalizeBoardEdges } from '../systems/evidenceBoard';
+import { canonicalPlanFingerprint } from '../systems/planComparison';
 
 const escape = (value: string): string => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
@@ -24,6 +26,10 @@ export class GameUI {
   private readonly extensionLoad = loadExtensions();
   private extensions = this.extensionLoad.save;
   private notebookTab: NotebookTab = 'evidence';
+  private notebookRenderedTab: NotebookTab | null = null;
+  private boardSelected: string | null = null;
+  private boardChecked = false;
+  private boardFeedback = '';
   private readonly loaded = loadCampaign();
   private campaign: CampaignSave | null = this.loaded.save;
   private activeCase: CampaignCase = getCampaignCase(this.campaign?.currentCaseId ?? CAMPAIGN_CASES[0].id);
@@ -164,11 +170,16 @@ export class GameUI {
       case 'submit-plan': this.commitEnergyPlan(); break;
       case 'submit-analysis': this.submitAnalysis(); break;
       case 'retry-analysis': this.showAnalysis(); break;
+      case 'legacy-analysis': this.showAnalysis(); break;
       case 'next-case': this.startCase(CAMPAIGN_CASES[this.activeCase.order]?.id ?? this.activeCase.id); break;
       case 'tag-evidence': this.toggleSuspect(button.dataset.id); break;
       case 'thermal': this.thermalView = !this.thermalView; this.controller?.setThermalView(this.thermalView); button.setAttribute('aria-pressed', String(this.thermalView)); this.toast(this.thermalView ? 'Тепловизор: учебная модель окон и дверей. Цвет показывает потенциальные потери.' : 'Тепловизор выключен'); break;
       case 'notebook': this.showNotebook(); break;
       case 'notebook-tab': if (['evidence', 'connections', 'tasks', 'history'].includes(button.dataset.tab ?? '')) { this.notebookTab = button.dataset.tab as NotebookTab; this.showNotebook(); } break;
+      case 'board-node': this.selectBoardNode(button.dataset.id); break;
+      case 'board-remove': this.removeBoardEdge(button.dataset.edge); break;
+      case 'board-check': this.checkBoard(); break;
+      case 'board-hint': this.requestBoardHint(); break;
       case 'zoom-in': this.controller?.changeZoom(.15); break;
       case 'zoom-out': this.controller?.changeZoom(-.15); break;
       case 'fullscreen': void this.toggleFullscreen(); break;
@@ -262,6 +273,8 @@ export class GameUI {
   }
 
   private startNew(): void {
+    this.boardSelected = null; this.boardChecked = false; this.boardFeedback = '';
+    this.extensions.boards = {};
     this.acceptCampaign(createCampaign());
     this.persist();
     this.startGame();
@@ -274,6 +287,7 @@ export class GameUI {
     this.activeCase = getCampaignCase(save.currentCaseId);
     this.progress = getCaseProgress(save);
     if (changed) {
+      this.boardSelected = null; this.boardChecked = false; this.boardFeedback = '';
       this.ready = false; this.nearby = null; this.thermalView = false;
       this.joystick?.reset(); this.controller?.setActive(false);
       this.controller?.setLevel(this.activeCase);
@@ -514,7 +528,66 @@ export class GameUI {
   }
 
   private showNotebook(): void {
-    this.showModal('Цифровой блокнот', renderNotebook(this.activeCase, this.progress, this.root.querySelector('#mission-message')!.textContent ?? '', this.notebookTab), 'УЛИКИ / СВЯЗИ / ЗАДАНИЯ / ИСТОРИЯ', 'wide-modal');
+    const scrollTop = this.root.querySelector('.notebook-tabs') && this.notebookRenderedTab === this.notebookTab
+      ? this.root.querySelector<HTMLElement>('#modal-layer .modal-body')?.scrollTop ?? 0 : 0;
+    const definition = getBoardDefinition(this.activeCase.id);
+    const edges = normalizeBoardEdges(definition, this.extensions.boards[this.activeCase.id] ?? [], this.progress?.inspectedIds ?? []);
+    this.showModal('Цифровой блокнот', renderNotebook(this.activeCase, this.progress, this.root.querySelector('#mission-message')!.textContent ?? '', this.notebookTab, {
+      edges, selectedId: this.boardSelected, checked: this.boardChecked,
+      hintLevel: this.extensions.hints[`board:${this.activeCase.id}`] ?? 0,
+      feedback: this.boardFeedback,
+    }, this.extensions.profile.rewardIds), 'УЛИКИ / ДОСКА / ЗАДАНИЯ / ИСТОРИЯ', 'wide-modal');
+    this.notebookRenderedTab = this.notebookTab;
+    this.root.querySelector<HTMLElement>('#modal-layer .modal-body')!.scrollTop = scrollTop;
+  }
+
+  private selectBoardNode(id?: string): void {
+    if (!id || !this.progress?.inspectedIds.includes(id)) return;
+    if (this.boardSelected && this.boardSelected !== id) {
+      const result = addBoardEdge(getBoardDefinition(this.activeCase.id), this.extensions.boards[this.activeCase.id] ?? [], this.progress.inspectedIds, this.boardSelected, id);
+      this.extensions.boards[this.activeCase.id] = result.edges;
+      this.boardFeedback = result.feedback;
+      this.boardSelected = null; this.boardChecked = false;
+      this.persist();
+    } else {
+      this.boardSelected = this.boardSelected === id ? null : id;
+      this.boardFeedback = this.boardSelected ? 'Теперь выберите второй осмотренный источник.' : '';
+    }
+    this.showNotebook();
+    this.root.querySelector<HTMLElement>(`[data-action="board-node"][data-id="${id}"]`)?.focus({ preventScroll: true });
+  }
+
+  private removeBoardEdge(key?: string): void {
+    if (!key || !this.progress) return;
+    const normalized = normalizeBoardEdges(getBoardDefinition(this.activeCase.id), this.extensions.boards[this.activeCase.id] ?? [], this.progress.inspectedIds);
+    this.extensions.boards[this.activeCase.id] = normalized.filter((edge) => edge !== key);
+    this.boardChecked = false; this.boardFeedback = 'Связь удалена. Можно проверить другое сопоставление.';
+    this.persist(); this.showNotebook();
+    this.root.querySelector<HTMLElement>('[data-action="board-check"]')?.focus({ preventScroll: true });
+  }
+
+  private checkBoard(): void {
+    if (!this.progress) return;
+    const definition = getBoardDefinition(this.activeCase.id);
+    this.extensions.boards[this.activeCase.id] = normalizeBoardEdges(definition, this.extensions.boards[this.activeCase.id] ?? [], this.progress.inspectedIds);
+    const result = evaluateBoard(definition, this.extensions.boards[this.activeCase.id], this.progress.inspectedIds);
+    this.boardChecked = true; this.boardSelected = null;
+    this.boardFeedback = result.complete
+      ? 'Цепочки подтверждены: наблюдения, режимы и ограничения согласованы.'
+      : `Проверьте доказательную цепочку: недостающих связей — ${result.missingRequiredKeys.length}, неподтверждённых — ${result.invalidKeys.length}.`;
+    if (result.complete) {
+      const rewardId = `v3:board:${this.activeCase.id}`;
+      if (!this.extensions.profile.rewardIds.includes(rewardId)) this.extensions.profile.rewardIds.push(rewardId);
+    }
+    this.persist(); this.audio.play(result.complete ? 'success' : 'retry'); this.showNotebook();
+    this.root.querySelector<HTMLElement>('[data-action="board-check"]')?.focus({ preventScroll: true });
+  }
+
+  private requestBoardHint(): void {
+    const key = `board:${this.activeCase.id}`;
+    this.extensions.hints[key] = Math.min(3, (this.extensions.hints[key] ?? 0) + 1) as 1 | 2 | 3;
+    this.persist(); this.showNotebook();
+    this.root.querySelector<HTMLElement>('[data-action="board-hint"]')?.focus({ preventScroll: true });
   }
 
   private toggleSuspect(id?: string): void {
@@ -538,6 +611,11 @@ export class GameUI {
 
   private showEnergyPlan(): void {
     if (!this.progress?.reportSolved || (!this.progress.analysisSolved && !this.progress.completed)) return;
+    if (!this.progress.analysisSolved || !hasRequiredEvidence(this.activeCase, this.progress)) {
+      const missing = this.activeCase.requiredDeviceIds.filter((id) => !this.progress!.inspectedIds.includes(id));
+      this.showModal('Сохранённый результат первой версии', `${this.progress.plan ? renderPlanPreview(evaluatePlan(this.activeCase, this.progress.plan)) : ''}<p>Ваше завершённое дело и прежние награды сохранены. В новой версии появились дополнительные источники и анализ; для проверки нового плана сначала изучите их.</p>${missing.length ? `<p>Ещё нужны: ${missing.map((id) => escape(this.activeCase.equipment.find((device) => device.id === id)!.shortName)).join(', ')}.</p>` : ''}<div class="modal-actions"><button class="button secondary" data-action="notebook">К источникам</button>${canAnalyzeCase(this.activeCase, this.progress) ? '<button class="button primary" data-action="legacy-analysis">Пройти новый анализ</button>' : '<button class="button primary" data-action="close">Продолжить исследование</button>'}</div>`, 'СОВМЕСТИМОСТЬ СОХРАНЕНИЙ', 'wide-modal');
+      return;
+    }
     this.draftPlan = this.progress.plan ? structuredClone(this.progress.plan) : defaultPlan(this.activeCase);
     this.showModal(this.activeCase.puzzle.kind === 'thermal' ? 'Лаборатория теплопотерь' : this.activeCase.puzzle.kind === 'crisis' ? 'Комплексный план школы' : 'Лаборатория решений', renderPlan(this.activeCase, this.draftPlan), `ПЛАН / ДЕЛО ${this.activeCase.order}`, 'wide-modal');
     this.updatePlanPreview();
@@ -556,8 +634,14 @@ export class GameUI {
 
   private commitEnergyPlan(): void {
     if (!this.campaign || !this.progress?.reportSolved) return;
+    if (!this.progress.analysisSolved || !hasRequiredEvidence(this.activeCase, this.progress)) { this.showEnergyPlan(); return; }
     this.draftPlan = readPlan(this.root, this.activeCase);
+    const previous = this.progress.completed && this.progress.plan ? canonicalPlanFingerprint(this.progress.plan) : null;
     const result = submitCampaignPlan(this.campaign, this.draftPlan);
+    if (result.result.passes && previous !== null && previous !== canonicalPlanFingerprint(this.draftPlan)) {
+      const rewardId = `v3:alternative:${this.activeCase.id}`;
+      if (!this.extensions.profile.rewardIds.includes(rewardId)) this.extensions.profile.rewardIds.push(rewardId);
+    }
     this.acceptCampaign(result.save); this.persist(); this.audio.play(result.result.passes ? 'success' : 'retry');
     if (result.result.passes) this.showFinalReport(result.result);
     else this.showModal('План требует доработки', `${renderPlanPreview(result.result)}<p>Решение пока не завершает дело. Изучите последствия, сохраните нужные функции и сравните другой вариант.</p><div class="modal-actions"><button class="button secondary" data-action="notebook">К данным</button><button class="button primary" data-action="energy-plan">Изменить план</button></div>`, 'ПРОВЕРКА БЕЗОПАСНОСТИ И ЭФФЕКТИВНОСТИ', 'wide-modal');
